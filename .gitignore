@@ -1,0 +1,8 @@
+# Build outputs and bundled engines are distributed as release assets.
+*.exe
+*.pdb
+Output/
+test-output/
+.baixaki/
+*.tmp
+*.bak
