@@ -1,3 +1,4 @@
+param([string]$Version, [switch]$NonInteractive, [switch]$NoOpen, [string]$IsccPath)
 # Builds BaixakiSetup.exe: gets yt-dlp + ffmpeg, compiles Baixaki.exe, then runs Inno Setup.
 # Run it through build-installer.bat. Keep all project files in this folder.
 $ErrorActionPreference = "Stop"
@@ -35,7 +36,7 @@ function Find-Ffmpeg {
 }
 
 try {
-    foreach ($f in "Baixaki.cs", "Baixaki.ico", "baixaki.iss") {
+    foreach ($f in "Baixaki.cs", "assets\baixaki.ico", "baixaki.iss") {
         if (-not (Test-Path $f)) { throw "Missing file: $f (keep it in the same folder as this script)." }
     }
 
@@ -60,10 +61,10 @@ try {
 
         if (-not $ffPath) {
             Write-Host "      winget did not provide ffmpeg, trying GitHub backup..." -ForegroundColor Yellow
-            $tmp = Join-Path $env:TEMP "ffmpeg-extract"
-            if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
+            $tmp = Join-Path $env:TEMP ("Baixaki-ffmpeg-" + [guid]::NewGuid().ToString("N"))
+
             New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-            $zip = Join-Path $env:TEMP "ffmpeg-backup.zip"
+            $zip = Join-Path $tmp "ffmpeg-backup.zip"
             Download "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip" $zip
             Expand-Archive $zip -DestinationPath $tmp -Force
             Remove-Item $zip -Force -ErrorAction SilentlyContinue
@@ -96,17 +97,20 @@ try {
         $parts[$parts.Length - 1] = [string]([int]$parts[$parts.Length - 1] + 1)
         $suggest = $parts -join '.'
     } catch { }
-    $new = Read-Host "Last build was $cur. Version for this build (press Enter for $suggest)"
+    if ($Version) { $new = $Version } elseif ($NonInteractive) { $new = $cur } else { $new = Read-Host "Last build was $cur. Version for this build (press Enter for $suggest)" }
     if ($new) { $new = $new.Trim().TrimStart('v', 'V') } else { $new = $suggest }
+    if ($new -notmatch '^\d+\.\d+\.\d+$') { throw "Version must use major.minor.patch format." }
     Set-Content "version.txt" -Value $new -Encoding ASCII
-    Set-Content "Version.cs" -Value ('static class AppInfo { public const string Version = "' + $new + '"; }') -Encoding UTF8
+    $assemblyVersion = $new + '.0'
+    $versionSource = 'using System.Reflection;' + "`r`n" + '[assembly: AssemblyVersion("' + $assemblyVersion + '")]' + "`r`n" + '[assembly: AssemblyFileVersion("' + $assemblyVersion + '")]' + "`r`n" + 'static class AppInfo { public const string Version = "' + $new + '"; }'
+    Set-Content "Version.cs" -Value $versionSource -Encoding UTF8
     Write-Host "      building version $new   (use the tag v$new on GitHub)"
 
     Write-Host "[3/4] Compiling Baixaki.exe..."
     $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
     if (-not (Test-Path $csc)) { $csc = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe" }
     if (-not (Test-Path $csc)) { throw "C# compiler not found." }
-    & $csc /nologo /target:winexe /optimize+ /win32icon:Baixaki.ico /out:Baixaki.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll Baixaki.cs Version.cs
+    & $csc /nologo /target:winexe /optimize+ /win32icon:assets\baixaki.ico /out:Baixaki.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.Core.dll Baixaki.cs DownloadState.cs DownloadEngine.cs AppUpdater.cs HelpCenter.cs ModernControls.cs UiText.cs /resource:HelpTopics.json,Baixaki.HelpTopics.json Version.cs
     if ($LASTEXITCODE -ne 0) { throw "Compilation failed. Copy the error lines above and send them to Claude." }
 
     Write-Host "[4/4] Building the installer..."
@@ -119,13 +123,13 @@ try {
         foreach ($p in $c) { if (Test-Path $p) { return $p } }
         return $null
     }
-    $iscc = Find-Iscc
+    $iscc = if ($IsccPath) { if (-not (Test-Path -LiteralPath $IsccPath)) { throw "ISCC path does not exist." }; $IsccPath } else { Find-Iscc }
     if (-not $iscc) {
         Write-Host "      Inno Setup not found. Trying to install it with winget..."
         try {
             winget install --id JRSoftware.InnoSetup -e --accept-package-agreements --accept-source-agreements
         } catch { }
-        $iscc = Find-Iscc
+        $iscc = if ($IsccPath) { if (-not (Test-Path -LiteralPath $IsccPath)) { throw "ISCC path does not exist." }; $IsccPath } else { Find-Iscc }
     }
     if (-not $iscc) { throw "Inno Setup 6 is required. Install it free from https://jrsoftware.org/isdl.php and run this again." }
 
@@ -136,9 +140,10 @@ try {
 
     Write-Host ""
     Write-Host "Done! Your installer is here: $PSScriptRoot\Output\BaixakiSetup.exe" -ForegroundColor Green
-    Start-Process explorer.exe (Join-Path $PSScriptRoot "Output")
+    if (-not $NoOpen) { Start-Process explorer.exe (Join-Path $PSScriptRoot "Output") -WindowStyle Hidden }
 }
 catch {
     Write-Host ""
     Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
 }

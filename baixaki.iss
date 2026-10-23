@@ -1,8 +1,8 @@
 ; Baixaki installer script (Inno Setup 6). Built by build-installer.bat.
 ; Installs per-user (no admin needed) so yt-dlp can update itself.
-; The version comes from Baixaki.cs (build-installer.ps1 passes it in).
+; build-installer.ps1 passes the version and generates Version.cs.
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  #define MyAppVersion "1.1.0"
 #endif
 
 [Setup]
@@ -17,7 +17,7 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=Output
 OutputBaseFilename=BaixakiSetup
-SetupIconFile=Baixaki.ico
+SetupIconFile=assets\baixaki.ico
 UninstallDisplayIcon={app}\Baixaki.exe
 Compression=lzma2
 SolidCompression=yes
@@ -35,7 +35,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "Baixaki.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "yt-dlp.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Baixaki.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\baixaki.ico"; DestDir: "{app}"; DestName: "Baixaki.ico"; Flags: ignoreversion
 Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 
 [Icons]

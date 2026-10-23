@@ -2,6 +2,8 @@
 
 **Gerenciador de downloads para Windows com yt-dlp e FFmpeg.**
 
+[Baixar o instalador](https://github.com/TheOrionEXE/Baixaki/releases/latest) · [Guia avançado](GUIA-AVANCADO.md) · [Relatar um problema](https://github.com/TheOrionEXE/Baixaki/issues)
+
 O Baixaki reúne downloads individuais e coleções em uma interface nativa, com tema escuro e identidade magenta. A versão **1.1.0** adiciona fila persistente, descoberta de coleções, lotes manuais e recuperação de downloads interrompidos.
 
 A mesma interface é usada para todas as fontes. Os sites e recursos disponíveis dependem do [yt-dlp instalado](https://github.com/yt-dlp/yt-dlp), dos extratores e das condições de acesso de cada serviço.
@@ -20,7 +22,7 @@ O botão principal muda entre **Adicionar à fila** e **Abrir coleção** confor
 
 ## Limitação confirmada: perfis do Instagram
 
-O yt-dlp 2026.10.21 distribuído com esta compilação lista `instagram:user` como **CURRENTLY BROKEN**. Não anuncie download de perfis/abas de reels do Instagram como funcionalidade disponível nesta versão. Um link de reel individual e uma página de perfil usam capacidades diferentes.
+O yt-dlp 2026.10.21 usado na validação desta versão lista `instagram:user` como **CURRENTLY BROKEN**. O download de perfis e abas de reels do Instagram não está disponível com esse motor. Links de reels individuais usam outro extrator e dependem das condições de acesso do serviço.
 
 Se o motor retornar URL não suportada ou extrator quebrado, o Baixaki explica a limitação e não apresenta isso como um pedido de login. Ativar cookies ou forçar a seleção manual de coleção não repara esse extrator. As simulações com identidade “Instagram” validam a fila universal, não o acesso real a perfis do serviço.
 
@@ -32,7 +34,7 @@ Se o motor retornar URL não suportada ou extrator quebrado, o Baixaki explica a
 - Estado da fila, coleções, preferências e histórico preservados entre sessões.
 - Análise de URLs por metadados do yt-dlp, com seleção manual para casos ambíguos.
 - **Central de ajuda integrada**, acessível em **Central de ajuda (F1)**, com 12 tópicos e avisos para operações delicadas.
-- Um **Coleção de mídia** para playlists, canais, perfis e outras coleções que o extrator conseguir enumerar.
+- **Coleções de mídia** para playlists, canais, perfis e outras coleções que o extrator conseguir enumerar.
 - **Smart Batch Mode**: 50 itens elegíveis por lote, por padrão, e continuação manual.
 - **Smart Download**: intervalo configurável, prevenção de duplicatas, arquivo de downloads e tentativas limitadas para falhas transitórias.
 - Bloqueio de novas solicitações à fonte quando há indicação clara de limite de acesso ou desafio de autenticação.
@@ -61,6 +63,10 @@ Para uma distribuição portátil, mantenha `Baixaki.exe`, `yt-dlp.exe` e `ffmpe
 **Pausar** interrompe o processo ativo e conserva os arquivos necessários à retomada. A possibilidade de continuar os bytes já transferidos depende do formato e do servidor. **Cancelar itens** cancela os itens selecionados e limpa somente os temporários pertencentes à tarefa, preservando uma fonte já baixada para recuperação de conversão.
 
 Se uma conversão falhar, **Tentar novamente** reaproveita a fonte local quando ela ainda existe. Arquivos finais apagados deixam de ser considerados downloads existentes nas novas inclusões.
+
+### Seleção na fila
+
+Marque as caixas dos itens para aplicar ações em lote. O checkbox do cabeçalho marca ou desmarca os itens do filtro atual; as marcações permanecem ao trocar de filtro. Sem itens marcados, as ações usam as linhas selecionadas.
 
 ## Coleções e lotes
 
@@ -135,11 +141,11 @@ Para incluir a integração com yt-dlp e FFmpeg reais em um servidor HTTP tempor
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test.ps1 -Integration
 ```
 
-Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](IMPLEMENTATION-REPORT.md) descreve a validação realizada e seus limites.
+Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação realizada e seus limites.
 
 ## Atualizações
 
-**Atualizar yt-dlp** atualiza o yt-dlp separadamente. Pausar a fila e aguarde o encerramento do processo ativo antes de atualizar o motor.
+**Atualizar yt-dlp** atualiza o yt-dlp separadamente. Pause a fila e aguarde o encerramento do processo ativo antes de atualizar o motor.
 
 O aplicativo consulta as releases de `TheOrionEXE/Baixaki`. Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.1.0`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente.
 
@@ -151,14 +157,4 @@ O aplicativo consulta as releases de `TheOrionEXE/Baixaki`. Para distribuir uma 
 
 Os avisos distribuídos com o FFmpeg estão na pasta `licenses`. A licença do código do Baixaki deve ser definida pelo mantenedor em um arquivo `LICENSE`; este README não atribui uma licença ao projeto.
 
-
-
-
-
 O novo ícone é distribuído em assets/baixaki.ico. Para regenerá-lo a partir da geometria vetorial, execute build-icon.ps1; o processo usa somente System.Drawing e o compilador do Windows.
-
-
-### Seleção na fila
-
-Marque as caixas dos itens para aplicar ações em lote. O checkbox do cabeçalho marca ou desmarca os itens do filtro atual; as marcações permanecem ao trocar de filtro. Sem itens marcados, as ações usam as linhas selecionadas.
-
