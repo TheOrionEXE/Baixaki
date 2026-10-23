@@ -15,9 +15,9 @@ using System.Windows.Forms;
 class BaixakiForm : Form
 {
     // ---- auto-update settings ----
-    // AppVersion: raise it every time you publish a new release (e.g. "1.0.1").
+    // AppVersion comes from Version.cs, which build-installer.bat writes for you on every build.
     // UpdateRepo: your GitHub "owner/repo" that hosts the releases. While it still says OWNER/REPO, update checks are off.
-    const string AppVersion = "1.0.0";
+    static readonly string AppVersion = AppInfo.Version;
     const string UpdateRepo = "TheOrionEXE/Baixaki";
 
     // ---- palette ----
@@ -25,13 +25,13 @@ class BaixakiForm : Form
     static readonly Color Field = Color.FromArgb(31, 35, 46);
     static readonly Color Btn2 = Color.FromArgb(42, 47, 62);
     static readonly Color Btn2Hover = Color.FromArgb(55, 61, 80);
-    static readonly Color Accent = Color.FromArgb(124, 92, 255);
-    static readonly Color AccentHover = Color.FromArgb(143, 116, 255);
-    static readonly Color AccentDown = Color.FromArgb(104, 74, 235);
+    static readonly Color Accent = Color.FromArgb(214, 48, 180);
+    static readonly Color AccentHover = Color.FromArgb(230, 82, 199);
+    static readonly Color AccentDown = Color.FromArgb(184, 36, 154);
     static readonly Color TextMain = Color.FromArgb(235, 237, 245);
     static readonly Color TextMuted = Color.FromArgb(139, 145, 165);
     static readonly Color LogNormal = Color.FromArgb(170, 176, 196);
-    static readonly Color LogInfo = Color.FromArgb(167, 139, 250);
+    static readonly Color LogInfo = Color.FromArgb(244, 143, 224);
     static readonly Color LogOk = Color.FromArgb(74, 222, 128);
     static readonly Color LogFail = Color.FromArgb(248, 113, 113);
 
@@ -42,8 +42,11 @@ class BaixakiForm : Form
 
     TextBox txtUrl, txtPasta;
     RichTextBox log;
-    CheckBox chkPremiere, chkMp3;
-    Button btnDownload, btnPasta, btnTroca, btnUpdate;
+    CheckBox chkPremiere, chkMp3, chkVideo;
+    Button btnDownload, btnTroca, btnUpdate, btnCancel;
+    Process current;
+    volatile bool cancelled;
+    readonly object procLock = new object();
     string destino;
     string cfgPath;
     Regex urlRegex = new Regex(@"^https?://\S+\.\S+", RegexOptions.IgnoreCase);
@@ -124,9 +127,15 @@ class BaixakiForm : Form
 
         // ---- options ----
         chkPremiere = MakeCheck("Convert for Premiere", 24, 162);
-        chkPremiere.Checked = true;
+        chkPremiere.Checked = false;
         chkMp3 = MakeCheck("Audio only (MP3)", 230, 162);
-        chkMp3.CheckedChanged += delegate { chkPremiere.Enabled = !chkMp3.Checked; };
+        chkMp3.CheckedChanged += delegate
+        {
+            chkPremiere.Enabled = !chkMp3.Checked;
+            if (chkMp3.Checked) chkVideo.Checked = false;
+        };
+        chkVideo = MakeCheck("Video only (no audio)", 390, 162);
+        chkVideo.CheckedChanged += delegate { if (chkVideo.Checked) chkMp3.Checked = false; };
 
         // ---- folder ----
         Controls.Add(MakeCaption("SAVE TO", 24, 200));
@@ -144,14 +153,12 @@ class BaixakiForm : Form
         btnDownload.Font = new Font("Segoe UI Semibold", 11F);
         btnDownload.Click += StartDownload;
 
-        btnPasta = MakeButton("Open folder", 204, 278, 130, 44, Btn2, Btn2Hover, Btn2Hover);
-        btnPasta.Click += delegate
-        {
-            try { Process.Start("explorer.exe", "\"" + destino + "\""); } catch { }
-        };
-
-        btnUpdate = MakeButton("Update engine", 344, 278, 150, 44, Btn2, Btn2Hover, Btn2Hover);
+        btnUpdate = MakeButton("Update engine", 204, 278, 150, 44, Btn2, Btn2Hover, Btn2Hover);
         btnUpdate.Click += UpdateEngine;
+
+        btnCancel = MakeButton("Cancel", 364, 278, 120, 44, Color.FromArgb(70, 40, 52), Color.FromArgb(120, 50, 70), Color.FromArgb(150, 50, 70));
+        btnCancel.Visible = false;
+        btnCancel.Click += CancelDownload;
 
         // ---- log ----
         log = new RichTextBox();
@@ -336,12 +343,17 @@ class BaixakiForm : Form
         btnDownload.Enabled = false;
         btnDownload.Text = "Working...";
         btnDownload.BackColor = Btn2;
+        cancelled = false;
+        btnCancel.Text = "Cancel";
+        btnCancel.Enabled = true;
+        btnCancel.Visible = true;
         Log("--- " + url);
 
         bool audio = chkMp3.Checked;
         bool premiere = chkPremiere.Checked;
+        bool videoOnly = chkVideo.Checked;
         string dir = destino;
-        Thread t = new Thread(delegate() { DoWork(url, audio, premiere, dir); });
+        Thread t = new Thread(delegate() { DoWork(url, audio, premiere, videoOnly, dir); });
         t.IsBackground = true;
         t.Start();
     }
@@ -357,8 +369,55 @@ class BaixakiForm : Form
         btnDownload.Enabled = true;
         btnDownload.Text = "Download";
         btnDownload.BackColor = Accent;
+        btnCancel.Visible = false;
+        cancelled = false;
         txtUrl.Text = "";
         txtUrl.Focus();
+    }
+
+    // ---------- cancel ----------
+    void KillTree(Process p)
+    {
+        try
+        {
+            ProcessStartInfo k = new ProcessStartInfo("taskkill", "/PID " + p.Id + " /T /F");
+            k.CreateNoWindow = true;
+            k.UseShellExecute = false;
+            Process.Start(k);
+        }
+        catch
+        {
+            try { p.Kill(); } catch { }
+        }
+    }
+
+    void CancelDownload(object sender, EventArgs e)
+    {
+        cancelled = true;
+        btnCancel.Enabled = false;
+        btnCancel.Text = "Cancelling...";
+        Process p;
+        lock (procLock) { p = current; }
+        if (p != null) KillTree(p);
+    }
+
+    // Removes half-downloaded leftovers after a cancel
+    void CleanupPartial(string dir, DateTime since)
+    {
+        try
+        {
+            foreach (string f in Directory.GetFiles(dir))
+            {
+                FileInfo fi = new FileInfo(f);
+                if (fi.LastWriteTime < since) continue;
+                string n = fi.Name.ToLowerInvariant();
+                if (n.EndsWith(".part") || n.EndsWith(".ytdl") || n.EndsWith(".temp") || Regex.IsMatch(n, @"\.f\d+\.[a-z0-9]+$"))
+                {
+                    try { File.Delete(f); } catch { }
+                }
+            }
+        }
+        catch { }
     }
 
     // ---------- app self-update (GitHub Releases) ----------
@@ -518,14 +577,17 @@ class BaixakiForm : Form
             p.OutputDataReceived += delegate(object s, DataReceivedEventArgs ev) { if (ev.Data != null) onLine(ev.Data); };
             p.ErrorDataReceived += delegate(object s, DataReceivedEventArgs ev) { if (ev.Data != null) onLine(ev.Data); };
             p.Start();
+            lock (procLock) { current = p; }
+            if (cancelled) KillTree(p);
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
             p.WaitForExit();
+            lock (procLock) { current = null; }
             return p.ExitCode;
         }
     }
 
-    void DoWork(string url, bool audio, bool premiere, string dir)
+    void DoWork(string url, bool audio, bool premiere, bool videoOnly, string dir)
     {
         try
         {
@@ -542,10 +604,13 @@ class BaixakiForm : Form
             string ytArgs;
             if (audio)
                 ytArgs = "-x --audio-format mp3 --audio-quality 0" + common;
+            else if (videoOnly)
+                ytArgs = "-f \"bv*[vcodec^=avc1][ext=mp4]/bv*[ext=mp4]/bv*\" --merge-output-format mp4" + common;
             else
                 ytArgs = "-f \"bv*[vcodec^=avc1][ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b\" --merge-output-format mp4" + common;
 
             Run("yt-dlp", ytArgs, dir, onLine);
+            if (cancelled) { CleanupPartial(dir, started); Log("Cancelled."); return; }
 
             if (found == null)
                 found = Newest(dir, started, audio ? new string[] { ".mp3" } : new string[] { ".mp4", ".mkv", ".webm", ".mov" });
@@ -561,6 +626,7 @@ class BaixakiForm : Form
                 "-colorspace bt709 -color_primaries bt709 -color_trc bt709 " +
                 "-r 29.97 -c:a aac -b:a 192k -movflags +faststart \"" + outFile + "\"";
             int code = Run("ffmpeg", ffArgs, dir, delegate(string l) { Log(l); });
+            if (cancelled) { try { File.Delete(outFile); } catch { } Log("Cancelled. (the downloaded video was kept)"); return; }
             if (code == 0) Log("DONE: " + outFile);
             else Log("FAIL: ffmpeg conversion failed.");
         }

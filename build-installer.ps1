@@ -84,11 +84,29 @@ try {
             ForEach-Object { Copy-Item $_.FullName ("licenses\ffmpeg-" + $_.Name) -Force }
     } else { Write-Host "      already here, skipping." }
 
+    # Version: remembered in version.txt, suggested as "last + 1", and written into Version.cs for the build
+    $cur = "1.0.0"
+    if (Test-Path "version.txt") {
+        $t = (Get-Content "version.txt" -Raw).Trim()
+        if ($t) { $cur = $t }
+    }
+    $suggest = $cur
+    try {
+        $parts = $cur.Split('.')
+        $parts[$parts.Length - 1] = [string]([int]$parts[$parts.Length - 1] + 1)
+        $suggest = $parts -join '.'
+    } catch { }
+    $new = Read-Host "Last build was $cur. Version for this build (press Enter for $suggest)"
+    if ($new) { $new = $new.Trim().TrimStart('v', 'V') } else { $new = $suggest }
+    Set-Content "version.txt" -Value $new -Encoding ASCII
+    Set-Content "Version.cs" -Value ('static class AppInfo { public const string Version = "' + $new + '"; }') -Encoding UTF8
+    Write-Host "      building version $new   (use the tag v$new on GitHub)"
+
     Write-Host "[3/4] Compiling Baixaki.exe..."
     $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
     if (-not (Test-Path $csc)) { $csc = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe" }
     if (-not (Test-Path $csc)) { throw "C# compiler not found." }
-    & $csc /nologo /target:winexe /optimize+ /win32icon:Baixaki.ico /out:Baixaki.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll Baixaki.cs
+    & $csc /nologo /target:winexe /optimize+ /win32icon:Baixaki.ico /out:Baixaki.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll Baixaki.cs Version.cs
     if ($LASTEXITCODE -ne 0) { throw "Compilation failed. Copy the error lines above and send them to Claude." }
 
     Write-Host "[4/4] Building the installer..."
@@ -111,9 +129,7 @@ try {
     }
     if (-not $iscc) { throw "Inno Setup 6 is required. Install it free from https://jrsoftware.org/isdl.php and run this again." }
 
-    $ver = "1.0.0"
-    $m = Select-String -Path "Baixaki.cs" -Pattern 'const string AppVersion = "([^"]+)"' | Select-Object -First 1
-    if ($m) { $ver = $m.Matches[0].Groups[1].Value }
+    $ver = $new
     Write-Host "      version $ver"
     & $iscc "/DMyAppVersion=$ver" "baixaki.iss"
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed. Copy the error lines above and send them to Claude." }

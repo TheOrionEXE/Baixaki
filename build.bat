@@ -11,7 +11,8 @@ if not exist "%CSC%" (
 )
 set ICON=
 if exist "Baixaki.ico" set ICON=/win32icon:Baixaki.ico
-"%CSC%" /nologo /target:winexe /optimize+ %ICON% /out:Baixaki.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll Baixaki.cs
+if not exist "Version.cs" echo static class AppInfo { public const string Version = "1.0.0"; }> Version.cs
+"%CSC%" /nologo /target:winexe /optimize+ %ICON% /out:Baixaki.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll Baixaki.cs Version.cs
 if errorlevel 1 (
     echo.
     echo Build failed. Copy the error lines above and send them to Claude.
