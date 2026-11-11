@@ -71,7 +71,7 @@ Para uma distribuição portátil, mantenha `Baixaki.exe`, `yt-dlp.exe` e `ffmpe
 3. Um vídeo individual entra na Fila e começa a baixar. Em uma playlist, marque os vídeos e clique em **Adicionar N à fila**.
 4. Acompanhe na aba **Fila**. Quando terminar, o item passa para **Concluídos**, onde você abre o arquivo ou a pasta.
 
-**Pausar** interrompe o processo ativo e conserva os arquivos necessários à retomada. A possibilidade de continuar os bytes já transferidos depende do formato e do servidor. O X de um item em andamento cancela e limpa só os temporários da tarefa. Se uma conversão falhar, **Tentar de novo** reaproveita a fonte local quando ela ainda existe.
+**Pausar** interrompe o processo ativo e conserva os arquivos necessários à retomada. A possibilidade de continuar os bytes já transferidos depende do formato e do servidor. O X de um item em andamento cancela e limpa só os temporários da tarefa. **Limpar fila**, ao lado de Baixar tudo, remove de uma vez tudo que ainda não terminou (com confirmação) e não apaga nenhum arquivo já baixado. Se uma conversão falhar, **Tentar de novo** reaproveita a fonte local quando ela ainda existe.
 
 ## Cuidado com perfis e coleções
 
@@ -101,10 +101,10 @@ Para gerar o instalador com o fluxo interativo existente:
 build-installer.bat
 ```
 
-Para uma compilação automatizada da versão 1.2.2:
+Para uma compilação automatizada da versão 1.2.3:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.2 -NonInteractive -NoOpen
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.3 -NonInteractive -NoOpen
 ```
 
 O instalador requer Inno Setup 6. O script reutiliza os motores locais quando presentes; quando faltam, tenta obtê-los conforme o fluxo de compilação. Caso o compilador Inno Setup esteja em outro local, informe `-IsccPath "C:\caminho\ISCC.exe"`.
@@ -125,13 +125,13 @@ Para incluir a integração com yt-dlp e FFmpeg reais em um servidor HTTP tempor
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test.ps1 -Integration
 ```
 
-Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.2.2 e seus limites.
+Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.2.3 e seus limites.
 
 ## Atualizações
 
 O yt-dlp se atualiza sozinho uma vez por dia (e há um botão **Verificar** nas configurações). O Baixaki também procura versões novas na release mais recente de `TheOrionEXE/Baixaki` ao abrir e oferece a atualização dentro do aplicativo.
 
-Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.2`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente; o passo a passo está em [GITHUB-UPDATE.md](GITHUB-UPDATE.md).
+Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.3`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente; o passo a passo está em [GITHUB-UPDATE.md](GITHUB-UPDATE.md).
 
 ## Componentes e licenças
 

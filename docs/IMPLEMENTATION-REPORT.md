@@ -1,17 +1,17 @@
-# Relatório de implementação — Baixaki 1.2.2
+# Relatório de implementação — Baixaki 1.2.3
 
-Este relatório descreve a série 1.2 (a interface nova da 1.2.0 e as correções da 1.2.1 e da 1.2.2), como foi validado e o que **não** foi validado.
+Este relatório descreve a série 1.2 (a interface nova da 1.2.0 e as correções da 1.2.1 e da 1.2.2 e o botão Limpar fila da 1.2.3), como foi validado e o que **não** foi validado.
 
 ## Entregas
 
-- `Baixaki.exe`: aplicativo v1.2.2; versão de arquivo e assembly `1.2.2.0`.
-- `Output/BaixakiSetup.exe`: instalador v1.2.2, com o mesmo AppId e o mesmo nome esperado pelo atualizador.
+- `Baixaki.exe`: aplicativo v1.2.3; versão de arquivo e assembly `1.2.3.0`.
+- `Output/BaixakiSetup.exe`: instalador v1.2.3, com o mesmo AppId e o mesmo nome esperado pelo atualizador.
 - `Output/SHA256SUMS.txt`: hash do instalador.
 
-SHA-256 do `BaixakiSetup.exe` (79.777.118 bytes):
+SHA-256 do `BaixakiSetup.exe` (79.791.153 bytes):
 
 ```
-3A36A2C64C86F9F82FBDC74BCCDE4142FDA168C3CED7B03839E7AA20F1A0F7D4
+DD6679F5F98CBF438B12BA3CDEDC8C5E001E34DEE294DA25B783A4022AC61503
 ```
 
 Se o instalador for recompilado, o hash muda: atualize este arquivo e o `SHA256SUMS.txt`.
@@ -30,6 +30,10 @@ Se o instalador for recompilado, o hash muda: atualize este arquivo e o `SHA256S
 
 O motor de fila (`DownloadManager`, estado persistente, limites de acesso, duplicatas e recuperação) foi mantido e estendido, não reescrito.
 
+## Novidade da 1.2.3
+
+- **Limpar fila:** botão na aba Fila, ao lado de Baixar tudo. Com confirmação, cancela o que estiver baixando, apaga os temporários e remove de uma vez todos os itens não concluídos e as playlists abertas. Os downloads concluídos e os arquivos na pasta não são tocados. A limpeza é feita em bloco, gravando o estado uma única vez.
+
 ## Correções da 1.2.2
 
 - **Fonte em pausa para sempre:** qualquer linha do yt-dlp, até um simples aviso, que mencionasse `sign in`, `login`, `403` ou `authentication` pausava o site inteiro e matava o download. Como a pausa não tinha prazo e ficava gravada no estado do usuário, todas as tentativas seguintes eram recusadas na hora, e o vídeo ficava parado em "Na fila" mesmo com cookies. Agora só linhas `ERROR` pausam a fonte.
@@ -47,7 +51,7 @@ O motor de fila (`DownloadManager`, estado persistente, limites de acesso, dupli
 ## Validação realizada
 
 - Compilação no Windows com o compilador C# do .NET Framework (`build.bat` e `build-installer.ps1`).
-- `test.ps1`: **122** verificações do motor, **32** verificações de fluxo da interface e da ajuda, e renderização do layout em vários tamanhos (`test-output`).
+- `test.ps1`: **125** verificações do motor, **36** verificações de fluxo da interface e da ajuda, e renderização do layout em vários tamanhos (`test-output`).
 - Teste com o yt-dlp e o FFmpeg reais, em um vídeo público curto: análise concluída em cerca de 4,8 s; GIF de 5 s, WAV, miniatura JPG e MP4 720p concluídos.
 - Instalação silenciosa do `BaixakiSetup.exe` sobre uma instalação existente: sem erro, versão 1.2.0 no aplicativo e em Programas e Recursos, atalhos preservados.
 - Captura real da tela (não apenas renderização) para conferir o painel de configurações, a barra de título escura e o ícone.

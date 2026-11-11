@@ -245,6 +245,20 @@ class Tests
             manager.State.Queue.Add(new DownloadItem { Url="https://media.example/pending", Status="Pending", Updated=DateTime.UtcNow.AddDays(-30) });
             Check(manager.PruneCompleted(12)==1 && manager.State.Queue.Count==2 && File.Exists(kept),"Completed entries leave the list after 12 days; files and pending items are kept");
         }
+        // ---- 1.2.3: clear the queue ----
+        {
+            var fake=new SimulatedEngine { HoldDownload=true }; var manager=Manager(fake);
+            string kept=Path.Combine(manager.State.Destination,"done.mp4"); File.WriteAllText(kept,"x");
+            manager.State.Queue.Add(new DownloadItem { Url="https://media.example/done", Status="Completed", OutputFile=kept });
+            manager.State.Queue.Add(new DownloadItem { Url="https://media.example/failed", Status="Failed", Error="x" });
+            manager.State.Queue.Add(new DownloadItem { Url="https://media.example/cancelled", Status="Cancelled" });
+            manager.Add("https://media.example/active","Active",null,null,null); manager.Add("https://media.example/waiting","Waiting",null,null,null);
+            Task work=manager.Start(); await Task.Delay(40);
+            Check(manager.State.Queue.Any(q=>q.Status=="Downloading"),"An item is downloading before the queue is cleared");
+            int cleared=manager.ClearQueue(); await work;
+            Check(cleared==4 && manager.State.Queue.Count==1 && manager.State.Queue[0].Status=="Completed" && File.Exists(kept),"Clearing the queue removes every unfinished item, cancelling the active one, and keeps finished items and their files");
+            Check(!manager.Running && manager.ActiveId==null && manager.ClearQueue()==0,"The queue is idle after being cleared and clearing again does nothing");
+        }
         // ---- 1.2.2: a paused source must never block forever, and warnings must not pause it ----
         {
             Check(EngineRunner.ErrorRestriction("WARNING: [youtube] Sign in to confirm your age to see more formats")=="" && EngineRunner.ErrorRestriction("[download] HTTP Error 403: Forbidden")=="" && EngineRunner.ErrorRestriction("ERROR: [youtube] abc: Sign in to confirm you are not a bot")!="" && EngineRunner.ErrorRestriction("ERROR: HTTP Error 429: Too Many Requests")=="Rate limit","Only ERROR lines can pause a source; warnings are ignored");
@@ -275,7 +289,7 @@ class Tests
             Directory.Delete(link);
         }
         { string videos=Environment.GetFolderPath(Environment.SpecialFolder.MyVideos); Check(new DownloadState().Destination==(String.IsNullOrEmpty(videos)?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Videos"):videos) && DownloadState.DefaultDestination()==new DownloadState().Destination,"New installs save to the Windows Videos folder by default"); }
-        Check(AppInfo.Version=="1.2.2", "Application version 1.2.2");
+        Check(AppInfo.Version=="1.2.3", "Application version 1.2.3");
         Console.WriteLine("ALL " + passed + " CHECKS PASSED");
     }
     static int Main(string[] args)

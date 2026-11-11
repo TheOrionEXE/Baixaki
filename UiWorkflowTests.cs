@@ -141,6 +141,24 @@ class UiWorkflowTests
             Check(topics.Count == 12 && Convert.ToString(topics[1]["warning"]).Contains("restrições na conta") && Convert.ToString(topics[1]["body"]).Contains("Instagram"), "12 embedded help topics, with the profile/account risk and the Instagram limitation");
             Check(!json.Contains("Opções avançadas") && !json.Contains("Analisar link") && json.Contains("12 dias"), "help no longer mentions the old screen and explains the 12-day history");
         }
+        // 5f. clearing the queue: unfinished items and open playlists go, finished downloads stay, the window does not change
+        {
+            using (var form = Open(new SimulatedEngine(), "clear"))
+            {
+                Size size = form.ClientSize; string done = Path.Combine(form.Manager.State.Destination, "kept.mp4"); File.WriteAllText(done, "x");
+                form.Manager.State.Queue.Add(new DownloadItem { Url = "https://media.example/a", Title = "A", Status = "Pending", Destination = form.Manager.State.Destination });
+                form.Manager.State.Queue.Add(new DownloadItem { Url = "https://media.example/b", Title = "B", Status = "Failed", Error = "x", Destination = form.Manager.State.Destination });
+                form.Manager.State.Queue.Add(new DownloadItem { Url = "https://media.example/c", Title = "C", Status = "Completed", OutputFile = done, Destination = form.Manager.State.Destination });
+                var job = new CollectionJob { Url = "https://media.example/list", Title = "Lista", Extractor = "Example", Status = "Discovered (extent unknown)" };
+                job.Entries.Add(new CollectionEntry { Id = "1", Extractor = "Example", Url = "https://media.example/1", Title = "Um", Kind = "Video" });
+                form.Manager.State.Collections.Add(job); form.RefreshNow();
+                Check(form.ListView.Rows.Count(r => r.Kind == "item") == 2 && form.ListView.Rows.Any(r => r.Kind == "playlist"), "the queue tab shows the two unfinished items and the open playlist");
+                Check(form.ClearQueueButton.Right <= form.ClientSize.Width, "the Limpar fila button fits inside the window");
+                form.ClearQueueNow(); form.RefreshNow();
+                Check(form.ListView.Rows.Count == 0 && form.Manager.State.Collections.Count == 0 && form.Manager.State.Queue.Count == 1 && form.Manager.State.Queue[0].Status == "Completed" && File.Exists(done), "clearing leaves only the finished download and its file");
+                Check(form.Preview.Sub == "Fila limpa." && form.ClientSize == size, "the user is told the queue is clear and the window does not change");
+            }
+        }
         // 5e. an item waiting on a paused source says so, with the reason, instead of looking like an ordinary queue
         {
             var engine = new SimulatedEngine();

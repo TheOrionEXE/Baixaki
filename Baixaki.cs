@@ -49,7 +49,8 @@ partial class BaixakiForm : Form
     const string UpdateRepo = "TheOrionEXE/Baixaki";
     readonly DownloadManager manager;
     PillInput urlInput, searchInput;
-    FlatButton formatChip, qualityChip, gifChip, folderChip, startButton, clearButton, gearButton;
+    FlatButton formatChip, qualityChip, gifChip, folderChip, startButton, clearButton, gearButton, clearQueueButton;
+    bool fStart, fClearDone;
     TabStrip tabs;
     RowList list;
     PreviewStrip preview;
@@ -149,8 +150,10 @@ partial class BaixakiForm : Form
         tabs = new TabStrip { Location = new Point(0, Theme.S(8)) };
         startButton = new FlatButton { Kind = BtnKind.Primary, Text = "Baixar tudo", Icon = Glyph.Download, Height = Theme.S(38) };
         clearButton = new FlatButton { Kind = BtnKind.Secondary, Text = "Limpar lista", Height = Theme.S(38) };
+        clearQueueButton = new FlatButton { Kind = BtnKind.Secondary, Text = "Limpar fila", Icon = Glyph.Close, Height = Theme.S(38) };
+        tips.SetToolTip(clearQueueButton, "Cancela o que está baixando e remove todos os itens da fila. Os vídeos já baixados não são apagados.");
         searchInput = new PillInput { Placeholder = "Buscar", IconGlyph = Glyph.Search, ShowButton = false, Width = Theme.S(210), Height = Theme.S(38), Visible = false };
-        tabRow.Controls.Add(tabs); tabRow.Controls.Add(startButton); tabRow.Controls.Add(clearButton); tabRow.Controls.Add(searchInput);
+        tabRow.Controls.Add(tabs); tabRow.Controls.Add(startButton); tabRow.Controls.Add(clearQueueButton); tabRow.Controls.Add(clearButton); tabRow.Controls.Add(searchInput);
         tabRow.Resize += delegate { PlaceTabRow(); };
         UpdateChips(); PlaceTabRow();
     }
@@ -170,9 +173,12 @@ partial class BaixakiForm : Form
     }
     void PlaceTabRow()
     {
-        int right = tabRow.Width, y = Theme.S(7);
-        startButton.Location = new Point(right - startButton.Width, y); clearButton.Location = new Point(right - clearButton.Width, y);
-        searchInput.Location = new Point(clearButton.Left - Theme.S(10) - searchInput.Width, y);
+        int right = tabRow.Width, y = Theme.S(7), gap = Theme.S(10);
+        // Queue tab: [Limpar fila] [Baixar tudo]. Finished tab: [Buscar] [Limpar lista]. Visible is unreliable before the first show, so flags decide.
+        startButton.Location = new Point(right - startButton.Width, y);
+        clearQueueButton.Location = new Point((fStart ? startButton.Left - gap : right) - clearQueueButton.Width, y);
+        clearButton.Location = new Point(right - clearButton.Width, y);
+        searchInput.Location = new Point(clearButton.Left - gap - searchInput.Width, y);
     }
     void UpdateChips()
     {
@@ -208,6 +214,7 @@ partial class BaixakiForm : Form
         qualityChip.Click += delegate { ShowQualityMenu(); };
         gifChip.Click += delegate { EditGif(); };
         folderChip.Click += delegate { ChooseFolder(); };
+        clearQueueButton.Click += delegate { ClearQueue(true); };
         gearButton.Click += delegate { ToggleSettings(); };
         tabs.SelectedChanged += delegate { list.EmptyTitle = tabs.Selected == 0 ? "Nada na fila" : "Nenhum download concluído"; RefreshUi(); };
         startButton.Click += delegate { if (manager.Running) manager.Pause(); else StartQueue(); RefreshUi(); };
@@ -264,6 +271,21 @@ partial class BaixakiForm : Form
     {
         using (var dialog = new FolderBrowserDialog { Description = "Escolha a pasta para os novos downloads", SelectedPath = manager.State.Destination })
             if (dialog.ShowDialog(this) == DialogResult.OK) { manager.State.Destination = dialog.SelectedPath; Persist(); UpdateChips(); foreach (var refresher in settingsRefresh) refresher(); }
+    }
+    // Removes every unfinished item and open playlist. Finished downloads and their files stay.
+    void ClearQueue(bool confirm)
+    {
+        var jobs = manager.State.Collections.Where(JobOpen).ToList();
+        int items = manager.State.Queue.Count(q => q.Status != "Completed");
+        if (items + jobs.Count == 0) return;
+        if (confirm)
+        {
+            string what = items + (items == 1 ? " item" : " itens") + (jobs.Count > 0 ? " e " + jobs.Count + (jobs.Count == 1 ? " playlist" : " playlists") : "");
+            if (MessageBox.Show(this, "Remover " + what + " da fila?\n\nDownloads em andamento serão cancelados e seus arquivos temporários apagados. Os vídeos já baixados não são apagados.", "Limpar fila", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+        }
+        foreach (CollectionJob job in jobs) { expanded.Remove(job.Id); manager.RemoveCollection(job); }
+        manager.ClearQueue();
+        Feedback("Fila limpa.", false); RefreshUi();
     }
     void Persist()
     {
@@ -535,12 +557,16 @@ partial class BaixakiForm : Form
             list.EmptySub = tabs.Selected == 0 ? "Cole um link acima e pressione Enter." : "Os downloads concluídos ficam aqui por " + manager.State.KeepCompletedDays + " dias.";
             list.SetRows(BuildRows());
             bool canRun = queue.Any(q => (q.Status == "Pending" || q.Status == "Paused") && !manager.Held(q.Url) && !manager.Held(q.OriginalUrl));
-            startButton.Visible = tabs.Selected == 0 && (open > 0 || manager.Running);
+            int openJobs = manager.State.Collections.Count(JobOpen);
+            fStart = tabs.Selected == 0 && (open > 0 || manager.Running);
+            startButton.Visible = fStart;
+            clearQueueButton.Visible = tabs.Selected == 0 && (open > 0 || openJobs > 0);
             startButton.Text = manager.Running ? "Pausar" : queue.Any(q => q.Status == "Paused") ? "Retomar" : "Baixar tudo";
             startButton.Icon = manager.Running ? Glyph.Pause : Glyph.Download; startButton.Kind = manager.Running ? BtnKind.Secondary : BtnKind.Primary;
             startButton.Enabled = manager.Running || (canRun && !manager.Busy && !manager.Updating);
             bool completedTab = tabs.Selected == 1;
-            clearButton.Visible = completedTab && done > 0; searchInput.Visible = completedTab && done > 0;
+            fClearDone = completedTab && done > 0;
+            clearButton.Visible = fClearDone; searchInput.Visible = fClearDone;
             PlaceTabRow();
             string url = urlInput.Box.Text.Trim();
             urlInput.Button.Enabled = Safety.ValidUrl(url) && unsupportedUrl != url && !manager.Updating;
@@ -804,6 +830,8 @@ partial class BaixakiForm : Form
     internal PreviewStrip Preview { get { return preview; } }
     internal Control SettingsPanelControl { get { return settingsPanel; } }
     internal FlatButton StartButton { get { return startButton; } }
+    internal FlatButton ClearQueueButton { get { return clearQueueButton; } }
+    internal void ClearQueueNow() { ClearQueue(false); }
     internal FlatButton FormatChip { get { return formatChip; } }
     internal FlatButton GearButton { get { return gearButton; } }
     internal Task AnalyzeNow() { return StartAnalysis(urlInput.Box.Text.Trim()); }

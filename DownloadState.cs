@@ -220,6 +220,7 @@ public static class Safety
     }
     public static void Cleanup(DownloadItem item)
     {
+        if (String.IsNullOrEmpty(item.Destination)) return; // nothing was ever written for an item without a destination
         string dir = WorkDirectory(item);
         if (!Directory.Exists(dir)) return;
         if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) return;

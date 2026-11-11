@@ -2,7 +2,7 @@
 
 Este guia vale para qualquer versão. O aplicativo oferece a atualização **sozinho** a quem já o usa, mas só enxerga uma versão nova quando existe uma **release publicada** com o instalador anexado. O código sozinho no repositório não basta.
 
-Repositório: `TheOrionEXE/Baixaki`. Versão atual: **1.2.2** (tag `v1.2.2`).
+Repositório: `TheOrionEXE/Baixaki`. Versão atual: **1.2.3** (tag `v1.2.3`).
 
 ## Como o atualizador decide
 
@@ -20,19 +20,25 @@ Se a tag for maior que a versão instalada, o aplicativo pergunta se deve atuali
 3. **Gere o instalador** (precisa do Inno Setup 6):
 
    ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.2 -NonInteractive -NoOpen
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.3 -NonInteractive -NoOpen
    ```
 
    A saída é `Output\BaixakiSetup.exe`. Grave o hash em `Output\SHA256SUMS.txt` e no `IMPLEMENTATION-REPORT.md`.
 4. **Envie o código** para o repositório (somente código, documentação e imagens; executáveis, motores, `Output` e `test-output` ficam fora, o `.gitignore` já cuida disso).
 5. **Publique a release** em GitHub > Releases > Draft a new release:
-   - Tag: `v1.2.2` (criada ao publicar, na branch `main`).
-   - Título: `Baixaki v1.2.2 — Corrige fonte pausada e downloads que não começavam`.
+   - Tag: `v1.2.3` (criada ao publicar, na branch `main`).
+   - Título: `Baixaki v1.2.3 — Botão Limpar fila`.
    - Anexos: `BaixakiSetup.exe` e `SHA256SUMS.txt`.
    - Marque como **latest release**. Pré-lançamentos não são vistos pelo atualizador.
 6. **Confira:** abra a lista de releases e veja se o anexo `BaixakiSetup.exe` aparece; instale a versão anterior em um computador de teste e use Configurações > Baixaki > Verificar.
 
-Nunca republique uma tag existente com outro instalador: quem já atualizou não receberia a correção. Se corrigir algo, gere uma versão nova (por exemplo 1.2.3 e `v1.2.3`).
+Nunca republique uma tag existente com outro instalador: quem já atualizou não receberia a correção. Se corrigir algo, gere uma versão nova (por exemplo 1.2.4 e `v1.2.4`).
+
+## Notas da release 1.2.3
+
+> - Novo botão **Limpar fila** na aba Fila: remove de uma vez tudo que ainda não terminou, com confirmação. Cancela o que está baixando e apaga os temporários; os vídeos já baixados não são apagados.
+>
+> SHA-256 do instalador: `DD6679F5F98CBF438B12BA3CDEDC8C5E001E34DEE294DA25B783A4022AC61503`
 
 ## Notas da release 1.2.2
 
@@ -42,7 +48,7 @@ Nunca republique uma tag existente com outro instalador: quem já atualizou não
 > - A pausa expira sozinha em 20 minutos (pausas antigas expiram em poucos minutos) e pode ser liberada antes em Configurações > Fontes em pausa.
 > - O item parado mostra "Fonte em pausa" e o motivo, e a mensagem do link diz quando o site volta.
 >
-> SHA-256 do instalador: `3A36A2C64C86F9F82FBDC74BCCDE4142FDA168C3CED7B03839E7AA20F1A0F7D4`
+> SHA-256 do instalador 1.2.2: `3A36A2C64C86F9F82FBDC74BCCDE4142FDA168C3CED7B03839E7AA20F1A0F7D4`
 
 ## Notas da release 1.2.1
 

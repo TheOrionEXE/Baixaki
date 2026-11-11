@@ -1,4 +1,4 @@
-# Guia avançado do Baixaki 1.2.2
+# Guia avançado do Baixaki 1.2.3
 
 Este guia reúne os mesmos tópicos da Central de ajuda do aplicativo (tecla F1, ou Configurações > Ajuda).
 
@@ -65,6 +65,8 @@ O X de um item em andamento cancela o download e limpa os parciais dele. O X de 
 Tentar de novo recoloca uma falha, um item cancelado ou bloqueado na fila, desde que não esteja ativo. Uma fonte bloqueada precisa ser resolvida e liberada antes de voltar a receber solicitações.
 
 Se preferir iniciar manualmente, desligue Iniciar ao adicionar nas configurações e use o botão Baixar tudo.
+
+Limpar fila, na aba Fila, remove de uma vez todos os itens ainda não concluídos e as playlists abertas. Ele pede confirmação, cancela o que estiver baixando e apaga os temporários. Os vídeos já baixados, os arquivos na pasta e a aba Concluídos não mudam.
 
 ## 6. Formatos e qualidade
 

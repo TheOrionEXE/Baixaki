@@ -375,6 +375,18 @@ public class DownloadManager
         if (ActiveId == item.Id) return;
         item.Status = "Pending"; item.Error = ""; item.Percent = null; Save();
     }
+    // Clears everything that is not finished: pending, paused, failed and cancelled items leave at once (temp files cleaned);
+    // an active download is cancelled and removed as soon as it stops. Finished downloads and their files are never touched.
+    public int ClearQueue()
+    {
+        var items = State.Queue.Where(q => q.Status != "Completed").ToList();
+        foreach (DownloadItem item in items)
+        {
+            if (ActiveId == item.Id) { item.RemoveWhenStopped = true; Cancel(item); }
+            else { Safety.Cleanup(item); UpdateEntry(item, "Discovered"); State.Queue.Remove(item); }
+        }
+        Save(); return items.Count;
+    }
     // Completed entries older than the retention period leave the list. Downloaded files are never touched.
     public int PruneCompleted(int days)
     {
