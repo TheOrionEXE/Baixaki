@@ -125,11 +125,13 @@ Para incluir a integração com yt-dlp e FFmpeg reais em um servidor HTTP tempor
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test.ps1 -Integration
 ```
 
-Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.1.0 e seus limites.
+Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.2.0 e seus limites.
 
 ## Atualizações
 
-O yt-dlp se atualiza sozinho uma vez por dia (e há um botão **Verificar** nas configurações). O aplicativo consulta as releases de `TheOrionEXE/Baixaki`. Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.0`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente.
+O yt-dlp se atualiza sozinho uma vez por dia (e há um botão **Verificar** nas configurações). O Baixaki também procura versões novas na release mais recente de `TheOrionEXE/Baixaki` ao abrir e oferece a atualização dentro do aplicativo.
+
+Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.0`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente; o passo a passo está em [GITHUB-UPDATE.md](GITHUB-UPDATE.md).
 
 ## Componentes e licenças
 
