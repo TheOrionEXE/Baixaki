@@ -2,45 +2,57 @@
 
 **Gerenciador de downloads para Windows com yt-dlp e FFmpeg.**
 
-[Baixar o instalador](https://github.com/TheOrionEXE/Baixaki/releases/latest) · [Guia avançado](GUIA-AVANCADO.md) · [Relatar um problema](https://github.com/TheOrionEXE/Baixaki/issues)
+O Baixaki baixa vídeos, áudios, GIFs e playlists em uma interface nativa, escura e enxuta. A versão **1.2.0** traz uma interface totalmente nova: um campo único para colar o link, miniaturas em todos os vídeos, abas separadas para a **Fila** e os **Concluídos**, novos formatos (GIF, WAV, miniatura) e uma análise de links sem espera.
 
-O Baixaki reúne downloads individuais e coleções em uma interface nativa, com tema escuro e identidade magenta. A versão **1.1.0** adiciona fila persistente, descoberta de coleções, lotes manuais e recuperação de downloads interrompidos.
+Os sites e recursos disponíveis dependem do [yt-dlp instalado](https://github.com/yt-dlp/yt-dlp), dos extratores e das condições de acesso de cada serviço.
 
-A mesma interface é usada para todas as fontes. Os sites e recursos disponíveis dependem do [yt-dlp instalado](https://github.com/yt-dlp/yt-dlp), dos extratores e das condições de acesso de cada serviço.
-
-![Interface do Baixaki 1.1.0](docs/images/baixaki-v1.1.0.png)
+![Interface do Baixaki 1.2.0](docs/images/baixaki-v1.2.0.png)
 
 *Interface com dados demonstrativos; nenhuma conta ou perfil real foi usado.*
 
-## Interface em português
+## A interface
 
-Cartões organizam o link, o formato, o destino, a coleção e a fila. O texto principal usa 11 pt; os títulos e campos de link são maiores. A janela ajusta a altura inicial ao conteúdo e ao espaço disponível na tela, sem reservar uma grande área vazia no rodapé.
+- **Um campo só.** Cole o link e pressione Enter. O Baixaki mostra a miniatura, o título, o canal e a duração enquanto identifica o link, e a análise não tem esperas artificiais.
+- **Janela estável.** O tamanho da janela é fixo e nunca muda sozinho: abas, playlists e configurações aparecem dentro dela. A lista é desenhada sob medida para redimensionar sem travar, mesmo com centenas de vídeos.
+- **Formato, qualidade e pasta à vista**, em etiquetas logo abaixo do campo. Todo o resto fica na engrenagem, no canto superior direito.
+- **Fila e Concluídos separados.** A Fila mostra o que está baixando, aguardando ou com problema. Os Concluídos aparecem agrupados por dia, com busca, e saem da lista depois de 12 dias (os arquivos nunca são apagados).
 
-O botão principal muda entre **Adicionar à fila** e **Abrir coleção** conforme o link. Os estados dos downloads aparecem em português. **Opções avançadas** reúne intervalo, duplicatas, tipo manual do link e cookies; **Atividade técnica** mostra os detalhes do motor quando necessário. Um duplo clique no item ou **Ver detalhes** abre o destino, arquivo e erro completo. A fila oferece filtros com contadores — **Em andamento**, **Aguardando**, **Concluídos**, **Com erro** e **Pausados/cancelados** —, barras de progresso e botões **Abrir arquivo** e **Abrir pasta**.
+![Playlist com seleção de vídeos](docs/images/playlist-v1.2.0.png)
 
-![Fila com categorias e progresso demonstrativo](docs/images/fila-e-colecoes.png)
+### Playlists
+
+Cole o link de uma playlist e escolha o que baixar: a linha da playlist abre uma lista com miniaturas, duração e caixas de seleção. Para playlists do YouTube a listagem é automática e o padrão é **Todos** os vídeos (também há 10 e 50). Fora do YouTube, o programa pede confirmação antes de listar. Perfis inteiros podem gerar bloqueios, veja o aviso abaixo.
+
+### Formatos
+
+| Formato | Para que serve |
+|---|---|
+| **MP4** | Vídeo + áudio, o padrão. Qualidade: melhor, 1080p, 720p ou 480p. |
+| **Premiere** | H.264 em MP4, `yuv420p`, áudio AAC, para abrir bem em editores. |
+| **GIF** | Um trecho do vídeo: início, duração (até 60 s) e largura. Só o trecho é baixado. |
+| **MP3** | Apenas o áudio, compatível com tudo. |
+| **WAV** | Áudio sem perda, para edição. |
+| **Miniatura** | Só a imagem de capa, em JPG. |
+
+![Configurações](docs/images/configuracoes-v1.2.0.png)
+
+### Configurações
+
+Pasta padrão, iniciar ao adicionar, pular já baixados, subpasta por playlist, espera entre itens, itens por playlist, cookies do navegador, versões do yt-dlp e do Baixaki, registro técnico, pasta de dados e Central de ajuda. A **espera entre itens** é automática: 1 segundo para menos de 10 vídeos e 5 segundos a partir disso (também dá para fixar o valor). O **yt-dlp se atualiza sozinho**, no máximo uma vez por dia e só quando nada está baixando.
 
 ## Limitação confirmada: perfis do Instagram
 
-O yt-dlp 2026.10.21 usado na validação desta versão lista `instagram:user` como **CURRENTLY BROKEN**. O download de perfis e abas de reels do Instagram não está disponível com esse motor. Links de reels individuais usam outro extrator e dependem das condições de acesso do serviço.
-
-Se o motor retornar URL não suportada ou extrator quebrado, o Baixaki explica a limitação e não apresenta isso como um pedido de login. Ativar cookies ou forçar a seleção manual de coleção não repara esse extrator. As simulações com identidade “Instagram” validam a fila universal, não o acesso real a perfis do serviço.
+O yt-dlp 2026.10.21 distribuído com esta compilação lista `instagram:user` como **CURRENTLY BROKEN**. Por isso, ao colar o link de um perfil do Instagram, o Baixaki avisa na hora, sem fazer nenhuma requisição, e sugere colar o link de um post ou reel. Links de posts e reels individuais continuam funcionando. Ativar cookies ou forçar a seleção manual não repara esse extrator.
 
 ## Recursos
 
-- **Vídeo + áudio**, **somente vídeo sem áudio** ou **somente áudio em MP3** em um seletor exclusivo.
-- Conversão opcional para Premiere em downloads de vídeo, com H.264, AAC quando aplicável e pixels `yuv420p`. O modo somente vídeo continua sem áudio após a conversão.
 - Fila sequencial com inclusão de itens durante os downloads, pausa, retomada, cancelamento, remoção e novas tentativas.
-- Estado da fila, coleções, preferências e histórico preservados entre sessões.
-- Análise de URLs por metadados do yt-dlp, com seleção manual para casos ambíguos.
-- **Central de ajuda integrada**, acessível em **Central de ajuda (F1)**, com 12 tópicos e avisos para operações delicadas.
-- **Coleções de mídia** para playlists, canais, perfis e outras coleções que o extrator conseguir enumerar.
-- **Smart Batch Mode**: 50 itens elegíveis por lote, por padrão, e continuação manual.
-- **Smart Download**: intervalo configurável, prevenção de duplicatas, arquivo de downloads e tentativas limitadas para falhas transitórias.
+- Fila, playlists, preferências e histórico preservados entre sessões; downloads interrompidos voltam pausados.
+- **Central de ajuda integrada** (F1 ou Configurações > Ajuda), com 12 tópicos e avisos para operações delicadas. O [guia avançado](GUIA-AVANCADO.md) traz o mesmo conteúdo.
+- Prevenção de duplicatas e tentativas limitadas para falhas transitórias.
 - Bloqueio de novas solicitações à fonte quando há indicação clara de limite de acesso ou desafio de autenticação.
-- Cookies opcionais de um navegador compatível, selecionados apenas para a sessão.
-- Pasta de destino personalizável, detecção de link na área de transferência e registro de atividade.
-- Atualização do yt-dlp e verificação de atualizações do aplicativo pelo GitHub.
+- Cookies opcionais de um navegador compatível, usados apenas durante a sessão.
+- Detecção de link na área de transferência.
 
 ## Instalação
 
@@ -54,56 +66,26 @@ Para uma distribuição portátil, mantenha `Baixaki.exe`, `yt-dlp.exe` e `ffmpe
 
 ## Como usar
 
-1. Cole a URL de uma página de mídia ou coleção. O Baixaki fará a análise automaticamente.
-2. Escolha o modo, a pasta de destino e, se desejar, a conversão para Premiere.
-3. Para um item individual, clique em **Adicionar à fila**.
-4. Para uma coleção, o painel abre com uma prévia limitada. A descoberta ampliada é manual: revise o aviso, o limite inicial de 10 e o tamanho do lote; use **Buscar itens** e depois **Adicionar lote à fila** para adicionar as entradas descobertas à fila.
-5. Clique em **Iniciar downloads / Retomar fila** para iniciar o processamento.
+1. Cole o link de um vídeo ou playlist no campo do topo e pressione **Enter** (ou clique em **Adicionar**).
+2. Antes, se quiser, mude o formato, a qualidade ou a pasta nas etiquetas abaixo do campo.
+3. Um vídeo individual entra na Fila e começa a baixar. Em uma playlist, marque os vídeos e clique em **Adicionar N à fila**.
+4. Acompanhe na aba **Fila**. Quando terminar, o item passa para **Concluídos**, onde você abre o arquivo ou a pasta.
 
-**Pausar** interrompe o processo ativo e conserva os arquivos necessários à retomada. A possibilidade de continuar os bytes já transferidos depende do formato e do servidor. **Cancelar itens** cancela os itens selecionados e limpa somente os temporários pertencentes à tarefa, preservando uma fonte já baixada para recuperação de conversão.
+**Pausar** interrompe o processo ativo e conserva os arquivos necessários à retomada. A possibilidade de continuar os bytes já transferidos depende do formato e do servidor. O X de um item em andamento cancela e limpa só os temporários da tarefa. Se uma conversão falhar, **Tentar de novo** reaproveita a fonte local quando ela ainda existe.
 
-Se uma conversão falhar, **Tentar novamente** reaproveita a fonte local quando ela ainda existe. Arquivos finais apagados deixam de ser considerados downloads existentes nas novas inclusões.
+## Cuidado com perfis e coleções
 
-### Seleção na fila
+**Listar perfis inteiros pode causar bloqueios temporários e restrições na conta**, especialmente usando cookies. A espera entre solicitações não elimina esse risco. Fora do YouTube, o programa pede confirmação antes de listar uma coleção. Comece com 10 itens, sem autenticação quando possível, e confira os resultados antes de ampliar a operação. O limite de itens não garante uma quantidade exata de requisições; o extrator pode consultar mais páginas.
 
-Marque as caixas dos itens para aplicar ações em lote. O checkbox do cabeçalho marca ou desmarca os itens do filtro atual; as marcações permanecem ao trocar de filtro. Sem itens marcados, as ações usam as linhas selecionadas.
+Limites de acesso e exigências claras de autenticação suspendem novas solicitações à fonte afetada. Quando o motor informa `Retry-After`, o prazo é respeitado. Sem prazo utilizável, a fonte fica em pausa até a liberação manual, em **Configurações > Fontes em pausa**, depois de você resolver a causa. Falhas transitórias têm até duas novas tentativas, com espera conservadora.
 
-## Coleções e lotes
-
-A descoberta de entradas é separada do download. O limite inicial de descoberta é **10 entradas**, e a enumeração ampliada pede confirmação. Os limites disponíveis são 10, 50, 100, todos os disponíveis ou um número personalizado. Uma pasta específica da coleção é opcional; o modo e a conversão selecionados são aplicados aos novos itens do lote.
-
-Os filtros de vídeo e de mídia compatível com áudio usam os metadados efetivamente retornados. Quando o extrator não informa o tipo, essas entradas não são classificadas por suposição; **Toda mídia acessível** permite encaminhá-las para a tentativa normal de download. Tipos que o pipeline de vídeo/MP3 não atende são identificados como não suportados.
-
-- O padrão é um download por vez e 50 itens elegíveis por lote.
-- O próximo lote depende de uma ação manual após o lote atual terminar ou ser cancelado.
-- A descoberta salva entradas durante a enumeração e pode terminar parcialmente.
-- Uma nova descoberta reconcilia os identificadores já conhecidos; não existe uma promessa de paginação ou retomada exata para todos os extratores.
-- Totais desconhecidos permanecem desconhecidos. Entradas de mídia não equivalem necessariamente ao número de publicações de um perfil.
-- Perfis grandes dependem do extrator, da autenticação e dos limites do serviço. A lógica foi testada com 2.005 entradas simuladas por extrator; isso não garante a enumeração de qualquer perfil real.
-
-## Ajuda avançada e cuidado com perfis
-
-Abra **Central de ajuda (F1)** no programa ou consulte o [guia avançado](GUIA-AVANCADO.md). Há instruções sobre coleções grandes, filtros, lotes, recuperação, conversão, cookies, limites e diagnóstico.
-
-**Enumerar perfis pode causar bloqueios temporários e restrições na conta**, especialmente usando cookies. A espera entre solicitações não elimina esse risco. Comece com 10 entradas, sem autenticação quando possível, e confira os resultados antes de ampliar a operação. O limite de entradas não garante uma quantidade exata de requisições; o extrator pode precisar consultar mais páginas.
-
-A descoberta ampliada exige confirmação; os lotes continuam manuais. Cookies são opcionais e começam desativados. Cancelar e remover tarefas também apresentam explicações breves antes de executar a ação.
-
-## Restrições e autenticação
-
-O intervalo padrão entre itens e entre solicitações de extração é de 5 segundos. Falhas reconhecidas como transitórias têm até duas novas tentativas, com espera conservadora. Limites de acesso e exigências claras de autenticação suspendem novas solicitações à fonte afetada.
-
-Quando o motor informa `Retry-After`, o prazo é respeitado. Se não houver um prazo utilizável, a fonte permanece em espera até a liberação manual. Após resolver a causa, use **Revisar fontes em pausa** e tente novamente os itens bloqueados. Cabeçalhos não expostos pelo yt-dlp não podem ser interpretados pelo aplicativo.
-
-O uso de cookies depende do suporte do yt-dlp e do acesso permitido pelo navegador. O aplicativo não exporta cookies nem grava seus valores na fila ou no histórico. A escolha de navegador é mantida somente na sessão. Use URLs de páginas sem credenciais ou tokens de autenticação embutidos; diagnósticos sensíveis são ocultados no registro.
+O uso de cookies depende do suporte do yt-dlp e do acesso permitido pelo navegador. O aplicativo não exporta cookies nem grava seus valores na fila ou no histórico, e a escolha de navegador vale somente na sessão. Use links sem credenciais ou tokens embutidos; diagnósticos sensíveis são ocultados no registro.
 
 ## Estado e recuperação
 
-O estado é salvo em `%APPDATA%\Baixaki\state.json`, com substituição atômica e uma cópia de segurança `state.json.bak`. A pasta anteriormente salva em `folder.txt` é aproveitada na primeira execução da nova versão.
+O estado é salvo em `%APPDATA%\Baixaki\state.json`, com substituição atômica e uma cópia de segurança `state.json.bak`. As miniaturas ficam em um cache em `%APPDATA%\Baixaki\thumbs`, limpo automaticamente. As pastas de trabalho ficam em `<destino>\.baixaki\<id-da-tarefa>`; não as apague enquanto precisar recuperar downloads ou conversões.
 
-Itens interrompidos retornam pausados. Retome a fila explicitamente após abrir o aplicativo. As pastas de trabalho ficam em `<destino>\.baixaki\<id-da-tarefa>`; não as apague enquanto precisar recuperar downloads ou conversões.
-
-O histórico diferencia MP3, vídeo, vídeo sem áudio e saídas convertidas. A prevenção de duplicatas verifica se os arquivos de saída ainda existem. **Limpar concluídos** limpa a visualização da fila, preservando o histórico.
+O histórico diferencia MP4, Premiere, GIF, MP3, WAV e miniatura, e também a qualidade escolhida. A prevenção de duplicatas verifica se os arquivos de saída ainda existem. As linhas de Concluídos saem da lista após 12 dias; isso não apaga nenhum arquivo.
 
 ## Compilar
 
@@ -119,10 +101,10 @@ Para gerar o instalador com o fluxo interativo existente:
 build-installer.bat
 ```
 
-Para uma compilação automatizada da versão 1.1.0:
+Para uma compilação automatizada da versão 1.2.0:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.1.0 -NonInteractive -NoOpen
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.0 -NonInteractive -NoOpen
 ```
 
 O instalador requer Inno Setup 6. O script reutiliza os motores locais quando presentes; quando faltam, tenta obtê-los conforme o fluxo de compilação. Caso o compilador Inno Setup esteja em outro local, informe `-IsccPath "C:\caminho\ISCC.exe"`.
@@ -135,19 +117,19 @@ A saída é `Output\BaixakiSetup.exe`. O script grava a versão do aplicativo e 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test.ps1
 ```
 
+O `test.ps1` compila e executa as checagens do motor (fila, formatos, ritmo, limites, histórico), do fluxo da interface (colar, analisar, adicionar, playlists, abas) e do layout (renderiza a janela com dados de exemplo, em três tamanhos, em `test-output`).
+
 Para incluir a integração com yt-dlp e FFmpeg reais em um servidor HTTP temporário de loopback:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test.ps1 -Integration
 ```
 
-Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação realizada e seus limites.
+Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.1.0 e seus limites.
 
 ## Atualizações
 
-**Atualizar yt-dlp** atualiza o yt-dlp separadamente. Pause a fila e aguarde o encerramento do processo ativo antes de atualizar o motor.
-
-O aplicativo consulta as releases de `TheOrionEXE/Baixaki`. Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.1.0`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente.
+O yt-dlp se atualiza sozinho uma vez por dia (e há um botão **Verificar** nas configurações). O aplicativo consulta as releases de `TheOrionEXE/Baixaki`. Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.0`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente.
 
 ## Componentes e licenças
 
@@ -157,4 +139,4 @@ O aplicativo consulta as releases de `TheOrionEXE/Baixaki`. Para distribuir uma 
 
 Os avisos distribuídos com o FFmpeg estão na pasta `licenses`. A licença do código do Baixaki deve ser definida pelo mantenedor em um arquivo `LICENSE`; este README não atribui uma licença ao projeto.
 
-O novo ícone é distribuído em assets/baixaki.ico. Para regenerá-lo a partir da geometria vetorial, execute build-icon.ps1; o processo usa somente System.Drawing e o compilador do Windows.
+O ícone é distribuído em `assets/baixaki.ico`. Para regenerá-lo a partir da geometria vetorial, execute `build-icon.ps1`; o processo usa somente System.Drawing e o compilador do Windows.

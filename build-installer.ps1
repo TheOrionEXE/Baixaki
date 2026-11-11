@@ -36,7 +36,7 @@ function Find-Ffmpeg {
 }
 
 try {
-    foreach ($f in "Baixaki.cs", "assets\baixaki.ico", "baixaki.iss") {
+    foreach ($f in "Baixaki.cs", "Baixaki.ico", "baixaki.iss") {
         if (-not (Test-Path $f)) { throw "Missing file: $f (keep it in the same folder as this script)." }
     }
 
@@ -110,7 +110,7 @@ try {
     $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
     if (-not (Test-Path $csc)) { $csc = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe" }
     if (-not (Test-Path $csc)) { throw "C# compiler not found." }
-    & $csc /nologo /target:winexe /optimize+ /win32icon:assets\baixaki.ico /out:Baixaki.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.Core.dll Baixaki.cs DownloadState.cs DownloadEngine.cs AppUpdater.cs HelpCenter.cs ModernControls.cs UiText.cs /resource:HelpTopics.json,Baixaki.HelpTopics.json Version.cs
+    & $csc /nologo /target:winexe /optimize+ /win32icon:assets\baixaki.ico /out:Baixaki.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.Core.dll Baixaki.cs DownloadState.cs DownloadEngine.cs AppUpdater.cs HelpCenter.cs ModernControls.cs UiText.cs /resource:HelpTopics.json,Baixaki.HelpTopics.json /resource:assets\baixaki.ico,Baixaki.Icon.ico Version.cs
     if ($LASTEXITCODE -ne 0) { throw "Compilation failed. Copy the error lines above and send them to Claude." }
 
     Write-Host "[4/4] Building the installer..."
@@ -147,3 +147,10 @@ catch {
     Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
+
+
+
+
+
+
+

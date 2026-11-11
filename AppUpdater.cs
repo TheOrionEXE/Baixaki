@@ -33,7 +33,7 @@ partial class BaixakiForm {
                 if (latest <= current) { if(manual)BeginInvoke(new Action(delegate{Feedback("Você já usa a versão mais recente disponível no GitHub.",false);}));return; }
                 BeginInvoke(new Action(delegate { AskUpdate(tag, dl); }));
             }
-            catch (Exception ex) { if(manual)try{BeginInvoke(new Action(delegate{Feedback("Não foi possível verificar atualizações. Consulte a atividade técnica.",true);Log(Safety.Redact(ex.Message));}));}catch{} }
+            catch (Exception ex) { if(manual)try{BeginInvoke(new Action(delegate{Feedback("Não foi possível verificar atualizações. Veja o registro técnico nas configurações.",true);Log(Safety.Redact(ex.Message));}));}catch{} }
         });
         t.IsBackground = true;
         t.Start();
@@ -47,10 +47,8 @@ partial class BaixakiForm {
             "Atualização do Baixaki", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2);
         if (r != DialogResult.Yes) return;
 
-        manager.Updating = true; RefreshSummary();
-        btnDownload.Enabled = false;
-        btnDownload.Text = "Atualizando…";
-        Log("--- Baixando atualização " + tag + "...");
+        manager.Updating = true; RefreshUi();
+        Feedback("Baixando a atualização " + tag + "…",false);
         Thread t = new Thread(delegate()
         {
             try
@@ -69,15 +67,7 @@ partial class BaixakiForm {
             catch (Exception ex)
             {
                 Log("FAIL: a atualização falhou: " + Safety.Redact(ex.Message));
-                try
-                {
-                    BeginInvoke(new Action(delegate
-                    {
-                        manager.Updating = false; RefreshSummary();
-                        btnDownload.Enabled = true;
-                        btnDownload.Text = "Adicionar à fila";
-                    }));
-                }
+                try { BeginInvoke(new Action(delegate { manager.Updating = false; Feedback("A atualização falhou. Tente de novo mais tarde.",true); RefreshUi(); })); }
                 catch { }
             }
         });
@@ -86,8 +76,3 @@ partial class BaixakiForm {
     }
 
 }
-
-
-
-
-

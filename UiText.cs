@@ -6,7 +6,25 @@ public static class UiText
     public static readonly string[] Filters={"All accessible media","Videos only (known metadata)","Audio-compatible only (known metadata)","Other media: unsupported"};
     public const string Unsupported="Este link não é atendido pelo yt-dlp instalado. Links de vídeos individuais ainda podem funcionar. Escolher Coleção ou ativar cookies não corrige um extrator ausente ou quebrado.";
     public static string Mode(MediaMode mode,bool premiere)
-    {return (mode==MediaMode.Mp3?"Áudio MP3":mode==MediaMode.VideoOnly?"Vídeo sem áudio":"Vídeo + áudio")+(premiere&&mode!=MediaMode.Mp3?" · Premiere":"");}
+    {
+        switch(mode)
+        {
+            case MediaMode.Mp3:return "MP3";
+            case MediaMode.Wav:return "WAV";
+            case MediaMode.Gif:return "GIF";
+            case MediaMode.Thumbnail:return "Miniatura";
+            case MediaMode.VideoOnly:return premiere?"Premiere · sem áudio":"MP4 sem áudio";
+            default:return premiere?"Premiere":"MP4";
+        }
+    }
+    // Chip label of the format selector, with the quality when it applies.
+    public static string Format(MediaMode mode,bool premiere){return mode==MediaMode.Mp3||mode==MediaMode.Wav||mode==MediaMode.Gif||mode==MediaMode.Thumbnail?Mode(mode,false):Mode(mode,premiere);}
+    public static string Quality(string quality){return String.IsNullOrEmpty(quality)||quality=="best"?"Melhor qualidade":quality+"p";}
+    public static string Day(DateTime local)
+    {
+        DateTime today=DateTime.Now.Date;
+        return local.Date==today?"HOJE":local.Date==today.AddDays(-1)?"ONTEM":local.ToString("dd/MM/yyyy");
+    }
     public static string Status(string status)
     {
         switch(status){case "Pending":return "Aguardando";case "Downloading":return "Baixando";case "Converting":return "Convertendo";case "Paused":return "Pausado";case "Completed":return "Concluído";case "Cancelled":return "Cancelado";case "Failed":return "Falhou";case "Blocked":return "Fonte em pausa";case "Unsupported":return "Não suportado";default:return status;}

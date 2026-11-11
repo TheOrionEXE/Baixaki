@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 class SimulatedEngine : EngineRunner
 {
-    public int Entries = 2005, Calls, Downloads, Conversions;
+    public int Entries = 2005, Calls, Downloads, Conversions, AnalysisDelay;
     public string Extractor = "Example", Scenario = "", LastMode = "";
     public bool Playlist, Empty, Partial, FailConversion, FailDownload, HoldDownload, SlowCancellation;
     public List<string> LastArguments;
@@ -24,6 +24,7 @@ class SimulatedEngine : EngineRunner
         if (Scenario == "restricted") return new ProcessResult { Code=1, Restricted=true, Restriction="Rate limit", RetryAfter=DateTime.UtcNow.AddSeconds(60) };
         if (args.Contains("--dump-single-json"))
         {
+            if (AnalysisDelay > 0) await Task.Delay(AnalysisDelay, token);
             stdout("{\"_type\":\"" + (Playlist ? "playlist" : "video") + "\",\"extractor_key\":\"" + Extractor + "\",\"id\":\"1\",\"title\":\"Resource\"}");
             return new ProcessResult();
         }
@@ -66,7 +67,7 @@ class Tests
     static DownloadManager Manager(SimulatedEngine engine)
     {
         string folder=Path.Combine(root,Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder);
-        var manager = new DownloadManager(new StateStore(folder),engine); manager.State.Destination=folder; manager.State.PaceSeconds=0; return manager;
+        var manager = new DownloadManager(new StateStore(folder),engine); manager.State.Destination=folder; manager.State.PaceAuto=false; manager.State.PaceSeconds=0; return manager;
     }
     static async Task Run()
     {
@@ -86,6 +87,7 @@ class Tests
             var job=manager.CreateCollection(info); job.Limit=0; await manager.Discover(job);
             Check(job.Entries.Count==2005,"2005 entries: " + extractor);
             await manager.Discover(job); Check(job.Entries.Count==2005,"Discovery ID reconciliation: " + extractor);
+            job.BatchSize=50;
             Check(manager.QueueBatch(job)==50 && manager.State.Queue.Count==50,"Manual 50 item batch: " + extractor);
             bool blocked=false; try { manager.QueueBatch(job); } catch (InvalidOperationException) { blocked=true; }
             Check(blocked,"Batch continuation gate: " + extractor);
@@ -187,7 +189,7 @@ class Tests
             var preview=Metadata.Resource(Metadata.Parse("{\"_type\":\"playlist\",\"extractor_key\":\"Example\",\"entries\":[{\"id\":\"one\",\"url\":\"https://media.example/one\",\"ie_key\":\"Example\"},{\"id\":\"two\",\"url\":\"https://media.example/two\"}]}"),"https://media.example/profile");
             Check(preview.IsCollection && preview.Preview.Count==1,"Bounded collection preview retains at most one entry");
             var fake=new SimulatedEngine();var manager=Manager(fake);var job=manager.CreateCollection(preview);
-            Check(job.Entries.Count==1 && job.Limit==10 && fake.Calls==0,"Creating collection does not enumerate source; conservative default 10");
+            Check(job.Entries.Count==1 && job.Limit==0 && job.BatchSize>=1000 && fake.Calls==0,"Creating collection does not enumerate source; default limit is all");
         }
         Check(!Metadata.Eligible(new CollectionEntry { Url="https://media.example/video",Kind="Video" },"Other media: unsupported"),"Unsupported other-media filter never queues video/audio");
         Check(!Metadata.Eligible(new CollectionEntry { Url="https://media.example/video",Kind="Video" },"Audio-compatible only (known metadata)"),"Audio filter does not assume that every video has audio");
@@ -201,7 +203,48 @@ class Tests
             var job=manager.CreateCollection(new ResourceInfo { Url="https://media.example/profile" });await manager.Discover(job);
             Check(job.Status=="Unsupported" && job.Error.Contains("cookies cannot repair") && job.Entries.Count==0,"Unsupported discovery retains actionable engine limitation");
         }
-        Check(AppInfo.Version=="1.1.0", "Application version 1.1.0");
+        // ---- Baixaki 1.2: faster analysis, automatic pace, new formats, 12-day history, Instagram profile guard ----
+        {
+            var fake=new SimulatedEngine(); var manager=Manager(fake); manager.State.PaceAuto=true; manager.State.PaceSeconds=5;
+            await manager.Analyze("https://media.example/video",CancellationToken.None);
+            Check(!fake.LastArguments.Contains("--sleep-requests"),"Link analysis never waits between requests");
+            fake.Playlist=true; var info=await manager.Analyze("https://media.example/list",CancellationToken.None); var job=manager.CreateCollection(info); await manager.Discover(job);
+            Check(fake.LastArguments.Contains("--sleep-requests"),"Discovery stays paced");
+            Check(manager.Pace==1,"Automatic pace is 1 s for fewer than 10 open items");
+            for (int i=0;i<10;i++) manager.State.Queue.Add(new DownloadItem { Url="https://media.example/q"+i, Status="Pending" });
+            Check(manager.Pace==5,"Automatic pace is 5 s from 10 open items");
+            manager.State.PaceAuto=false; manager.State.PaceSeconds=3; Check(manager.Pace==3,"Manual pace is honoured");
+        }
+        {
+            var fake=new SimulatedEngine(); var manager=Manager(fake); int before=fake.Calls; bool unsupported=false;
+            Check(DownloadManager.IsInstagramProfile("https://www.instagram.com/someuser/") && DownloadManager.IsInstagramProfile("https://instagram.com/someuser/reels/")
+                && !DownloadManager.IsInstagramProfile("https://www.instagram.com/reel/Cabc123/") && !DownloadManager.IsInstagramProfile("https://www.instagram.com/p/Cabc123/") && !DownloadManager.IsInstagramProfile("https://example.com/someuser/"),"Instagram profile links are recognised, posts and reels are not");
+            try { await manager.Analyze("https://www.instagram.com/someuser/",CancellationToken.None); } catch(UnsupportedResourceException) { unsupported=true; }
+            Check(unsupported && fake.Calls==before && manager.State.Holds.Count==0,"Instagram profile is rejected before any request is made");
+        }
+        {
+            Check(DownloadManager.ModeArguments(MediaMode.Wav).Contains("wav") && DownloadManager.ModeArguments(MediaMode.Thumbnail).Contains("--write-thumbnail"),"WAV and thumbnail modes map to yt-dlp options");
+            Check(String.Join(" ",DownloadManager.ModeArguments(MediaMode.VideoAudio,"720")).Contains("height<=720") && !String.Join(" ",DownloadManager.ModeArguments(MediaMode.VideoAudio,"best")).Contains("height"),"Quality caps the video height only when chosen");
+            var plain=new DownloadItem { Mode=MediaMode.VideoAudio }; var hd=new DownloadItem { Mode=MediaMode.VideoAudio, Quality="1080" }; var gifA=new DownloadItem { Mode=MediaMode.Gif, GifStart=0 }; var gifB=new DownloadItem { Mode=MediaMode.Gif, GifStart=10 };
+            Check(plain.Variant!=hd.Variant && gifA.Variant!=gifB.Variant && new DownloadItem { Mode=MediaMode.Mp3, Premiere=true }.Variant=="Mp3","Different quality or GIF clip is a different download; Premiere never applies to audio");
+            var data=Metadata.Parse("{\"id\":\"a\",\"title\":\"T\",\"duration\":125.4,\"channel\":\"Canal\",\"thumbnails\":[{\"url\":\"https://img.example/small.jpg\"},{\"url\":\"https://img.example/big.jpg\"}]}");
+            var entry=Metadata.Entry(data);
+            Check(entry.Thumb=="https://img.example/big.jpg" && entry.Duration==125 && entry.Channel=="Canal","Thumbnail, duration and channel are read from the metadata");
+        }
+        {
+            var fake=new SimulatedEngine(); var manager=Manager(fake); manager.State.Mode=MediaMode.Gif; manager.State.GifStart=5; manager.State.GifDuration=6;
+            manager.Add("https://media.example/gif","Clip",null,null,null,"https://img.example/t.jpg",90,"Canal"); await manager.Start(); var item=manager.State.Queue[0];
+            Check(item.Status=="Completed" && item.OutputFile.EndsWith(".gif") && fake.Conversions==1 && fake.LastMode.Contains("--download-sections") && item.Thumb=="https://img.example/t.jpg","GIF downloads only the chosen clip and converts it");
+            Check(Directory.GetParent(item.OutputFile).FullName==Path.GetFullPath(manager.State.Destination),"GIF lands in the destination folder");
+        }
+        {
+            var fake=new SimulatedEngine(); var manager=Manager(fake); string kept=Path.Combine(manager.State.Destination,"kept.mp4"); File.WriteAllText(kept,"x");
+            manager.State.Queue.Add(new DownloadItem { Url="https://media.example/old", Status="Completed", OutputFile=kept, Updated=DateTime.UtcNow.AddDays(-13) });
+            manager.State.Queue.Add(new DownloadItem { Url="https://media.example/new", Status="Completed", OutputFile=kept, Updated=DateTime.UtcNow.AddDays(-11) });
+            manager.State.Queue.Add(new DownloadItem { Url="https://media.example/pending", Status="Pending", Updated=DateTime.UtcNow.AddDays(-30) });
+            Check(manager.PruneCompleted(12)==1 && manager.State.Queue.Count==2 && File.Exists(kept),"Completed entries leave the list after 12 days; files and pending items are kept");
+        }
+        Check(AppInfo.Version=="1.2.0", "Application version 1.2.0");
         Console.WriteLine("ALL " + passed + " CHECKS PASSED");
     }
     static int Main(string[] args)

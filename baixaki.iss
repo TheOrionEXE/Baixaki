@@ -1,8 +1,8 @@
 ; Baixaki installer script (Inno Setup 6). Built by build-installer.bat.
 ; Installs per-user (no admin needed) so yt-dlp can update itself.
-; build-installer.ps1 passes the version and generates Version.cs.
+; The version comes from Baixaki.cs (build-installer.ps1 passes it in).
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.0"
+  #define MyAppVersion "1.2.0"
 #endif
 
 [Setup]
@@ -47,3 +47,5 @@ Name: "{autodesktop}\Baixaki"; Filename: "{app}\Baixaki.exe"; Tasks: desktopicon
 Filename: "{app}\Baixaki.exe"; Description: "{cm:LaunchProgram,Baixaki}"; Flags: nowait postinstall skipifsilent
 ; after a silent auto-update, reopen the app automatically
 Filename: "{app}\Baixaki.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
+
+

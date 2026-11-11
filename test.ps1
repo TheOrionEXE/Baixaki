@@ -7,7 +7,7 @@ if (-not (Test-Path -LiteralPath $csc)) { throw 'Windows .NET Framework C# compi
 New-Item -ItemType Directory -Path 'test-output' -Force | Out-Null
 $references = @('/nologo','/target:exe','/r:System.Web.Extensions.dll','/r:System.Core.dll')
 $core = @('DownloadState.cs','DownloadEngine.cs','Version.cs')
-$ui = @('Baixaki.cs','AppUpdater.cs','HelpCenter.cs','ModernControls.cs','UiText.cs','/resource:HelpTopics.json,Baixaki.HelpTopics.json','/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/win32icon:assets\baixaki.ico')
+$ui = @('Baixaki.cs','AppUpdater.cs','HelpCenter.cs','ModernControls.cs','UiText.cs','/resource:HelpTopics.json,Baixaki.HelpTopics.json','/resource:assets\baixaki.ico,Baixaki.Icon.ico','/r:System.Windows.Forms.dll','/r:System.Drawing.dll','/win32icon:assets\baixaki.ico')
 function Run-Check([string]$Name, [string[]]$Sources, [string[]]$Options, [string[]]$Arguments) {
     $binary = Join-Path $PSScriptRoot ('test-output\' + $Name + '.exe')
     & $csc @references @Options "/out:$binary" @Sources

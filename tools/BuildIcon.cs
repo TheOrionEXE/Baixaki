@@ -18,15 +18,12 @@ class BuildIcon
         using(var g=Graphics.FromImage(large))
         {
             g.SmoothingMode=SmoothingMode.AntiAlias;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.ScaleTransform(size*scale/256f,size*scale/256f);g.Clear(Color.Transparent);
-            using(var path=Round(12,12,232,232,58))using(var brush=new LinearGradientBrush(new PointF(12,12),new PointF(244,244),Color.FromArgb(41,46,64),Color.FromArgb(18,20,26)))g.FillPath(brush,path);
-            using(var path=Round(13,13,230,230,57))using(var pen=new Pen(Color.FromArgb(102,98,106,131),2))g.DrawPath(pen,path);
-            using(var path=Round(42,175,172,26,13))using(var brush=new SolidBrush(Color.FromArgb(51,214,48,180)))g.FillPath(brush,path);
-            using(var brush=new LinearGradientBrush(new PointF(94,52),new PointF(162,145),Color.FromArgb(238,88,203),Color.FromArgb(158,36,139)))
-            using(var pen=new Pen(brush,23))
-            {pen.StartCap=LineCap.Round;pen.EndCap=LineCap.Round;pen.LineJoin=LineJoin.Round;g.DrawLine(pen,128,52,128,143);g.DrawLines(pen,new[]{new Point(94,111),new Point(128,145),new Point(162,111)});}
-            using(var path=new GraphicsPath())using(var pen=new Pen(Color.FromArgb(235,237,245),15))
-            {pen.StartCap=LineCap.Round;pen.EndCap=LineCap.Round;pen.LineJoin=LineJoin.Round;path.AddLine(64,160,64,178);path.AddBezier(64,178,64,187,68,187,74,187);path.AddLine(74,187,182,187);path.AddBezier(182,187,192,187,192,183,192,178);path.AddLine(192,178,192,160);g.DrawPath(pen,path);}
-            using(var pen=new Pen(Color.FromArgb(238,88,203),9)){pen.StartCap=LineCap.Round;pen.EndCap=LineCap.Round;g.DrawLine(pen,90,212,166,212);}
+            // Baixaki 1.2: violet tile (the interface accent), bold white arrow, solid base.
+            using(var path=Round(12,12,232,232,64))using(var brush=new LinearGradientBrush(new PointF(12,12),new PointF(244,244),Color.FromArgb(190,146,255),Color.FromArgb(104,44,226)))g.FillPath(brush,path);
+            using(var path=Round(13,13,230,230,63))using(var pen=new Pen(Color.FromArgb(56,255,255,255),2))g.DrawPath(pen,path);
+            using(var pen=new Pen(Color.White,27))
+            {pen.StartCap=LineCap.Round;pen.EndCap=LineCap.Round;pen.LineJoin=LineJoin.Round;g.DrawLine(pen,128,56,128,142);g.DrawLines(pen,new[]{new Point(88,106),new Point(128,146),new Point(168,106)});}
+            using(var path=Round(68,178,120,26,13))using(var brush=new SolidBrush(Color.FromArgb(235,255,255,255)))g.FillPath(brush,path);
         }
         var output=new Bitmap(size,size,PixelFormat.Format32bppArgb);
         using(var g=Graphics.FromImage(output)){g.InterpolationMode=InterpolationMode.HighQualityBicubic;g.PixelOffsetMode=PixelOffsetMode.HighQuality;g.DrawImage(large,new Rectangle(0,0,size,size));}large.Dispose();return output;

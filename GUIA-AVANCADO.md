@@ -1,180 +1,166 @@
-# Guia avançado do Baixaki 1.1.0
+# Guia avançado do Baixaki 1.2.0
 
-Este conteúdo também está disponível na Central de ajuda (F1). Os nomes dos controles correspondem à interface em português.
+Este guia reúne os mesmos tópicos da Central de ajuda do aplicativo (tecla F1, ou Configurações > Ajuda).
 
-## 1. Começar e reconhecer URLs
+## 1. Começar e reconhecer links
 
-> Atenção: A análise automática também consulta a fonte. Os limites pedidos ao yt-dlp dependem do comportamento do extrator.
+> Atenção: A análise consulta a fonte. O tempo e o resultado dependem do site e do extrator do yt-dlp.
 
-Cole uma URL HTTP(S) de uma página de mídia ou coleção. A análise usa metadados do yt-dlp e solicita uma prévia de até uma entrada, com tempo limitado. Alguns extratores precisam consultar mais de uma página para identificar o recurso.
+Cole um link http(s) de uma página de vídeo ou playlist no campo do topo. O Baixaki identifica o link sozinho, sem esperas artificiais, e mostra abaixo a miniatura, o título, o canal e a duração.
 
-Detectar automaticamente escolhe entre mídia individual e coleção. Se a análise falhar ou o resultado for ambíguo, use Um vídeo / áudio ou Collection manualmente. A seleção manual não concede acesso a conteúdo indisponível.
+Pressione Enter ou clique em Adicionar. Um vídeo individual entra na Fila e começa a baixar. Uma playlist ou coleção abre uma linha própria na Fila para você escolher os vídeos.
 
-Uma coleção abre o mesmo Coleção de mídia, qualquer que seja o serviço. A enumeração ampliada não começa ao colar a URL: revise as opções e use Buscar itens. O botão apresenta um aviso antes das solicitações adicionais.
+As etiquetas abaixo do campo mostram o formato, a qualidade e a pasta de destino atuais. Clique em cada uma para mudar. As demais opções ficam na engrenagem, no canto superior direito.
 
-Para um item individual, escolha o modo e a pasta, clique em Adicionar à fila e depois em Iniciar downloads / Retomar fila. Novas URLs podem ser adicionadas enquanto a fila está em processamento.
+A janela tem tamanho fixo mínimo e nunca muda de tamanho sozinha: abas, playlists e configurações aparecem dentro dela. Você pode colar novos links enquanto os downloads acontecem.
 
-A interface usa cartões para agrupar opções, rótulos em português e mensagens de próxima ação. Opções avançadas e atividade técnica podem ser expandidas quando precisar. O tamanho inicial acompanha o conteúdo, dentro do espaço disponível na tela.
+## 2. Perfis: riscos e o que não funciona
 
-## 2. Perfis: riscos e primeiro teste
+> Atenção: Listar perfis inteiros pode causar limites de acesso e restrições na conta. Cookies associam as solicitações à conta autenticada. Nenhum ritmo de acesso garante ausência de bloqueios.
 
-> Atenção: Enumerar perfis pode causar limites de acesso e restrições na conta. Cookies associam solicitações à conta autenticada. Nenhum ritmo de acesso garante ausência de bloqueios.
+Use somente páginas às quais você pode acessar. Fora do YouTube, o Baixaki pede confirmação antes de listar uma coleção ou perfil, porque isso gera muitas solicitações. Comece com Itens por playlist em 10, deixe Cookies do navegador em Não usar se não precisar de login e mantenha a espera automática.
 
-Use somente páginas às quais você pode acessar. Antes de enumerar um perfil, prefira um teste pequeno: mantenha Buscar até em 10, deixe Cookies do navegador em Não usar se não precisar de login e use a espera padrão de 5 segundos ou um intervalo maior.
+O limite de itens não é um orçamento exato de requisições. Um extrator pode visitar páginas adicionais, retornar dados incompletos ou exigir autenticação.
 
-Clique em Buscar itens somente após ler o aviso. Revise o resultado e enfileire um lote pequeno. Confirme os arquivos antes de ampliar o limite. Não use Todos os disponíveis como primeiro teste de um perfil.
+Ao aparecer um limite de acesso, login obrigatório ou outro desafio, o programa suspende novas solicitações àquela fonte. Não libere a fonte repetidamente nem insista sem resolver a causa. Verifique a situação pelo acesso normal ao serviço.
 
-O limite de entradas não é um orçamento exato de requisições. Um extrator pode visitar páginas adicionais, retornar dados incompletos, não fornecer um total ou exigir autenticação. Um post também pode resultar em várias entradas de mídia.
+O programa não contorna CAPTCHA, não usa proxies e não promete evitar detecção ou restrições.
 
-Ao aparecer um limite de acesso, login obrigatório ou outro desafio claro, o programa suspende novas solicitações à fonte. Não libere repetidamente a fonte nem insista com novas tentativas sem resolver a causa. Pare e verifique a situação pelo acesso normal ao serviço.
+Perfis do Instagram não são suportados: o extrator de perfis do yt-dlp (instagram:user) está marcado como quebrado na versão 2026.10.21. O Baixaki avisa na hora, sem fazer nenhuma requisição. Links de posts e reels individuais continuam funcionando. Cookies não consertam um extrator quebrado.
 
-O programa não contorna CAPTCHA, não gira proxies e não promete evitar detecção ou restrições.
+## 3. Playlists e coleções
 
-Limitação confirmada do motor distribuído: instagram:user aparece como CURRENTLY BROKEN no yt-dlp 2026.10.21. Uma página como a aba /usuario/reels/ não tem suporte garantido. Links individuais e páginas de perfil são capacidades diferentes. Seleção manual ou cookies não consertam um extrator ausente ou quebrado. Não repita consultas ao perfil esperando que a autenticação corrija essa limitação.
+> Atenção: Listar todos os itens de uma coleção grande gera muitas solicitações. Listar e baixar são etapas separadas.
 
-## 3. Descoberta e filtros de coleções
+Ao adicionar uma playlist do YouTube, o Baixaki lista os vídeos automaticamente. Em outros sites, a linha mostra Listar itens e pede confirmação antes.
 
-> Atenção: Todos os disponíveis amplia a enumeração e pode gerar muitas solicitações. Descoberta e download são operações distintas.
+A linha da playlist mostra quantos vídeos foram encontrados e quantos estão marcados. Clique na linha, ou na seta, para abrir a lista com miniaturas e duração. Marque ou desmarque cada vídeo, ou use Selecionar todos.
 
-O painel mostra a fonte e o título retornados pelo extrator. Use a lista de coleções para restaurar trabalhos anteriores.
+O botão Adicionar N à fila envia os vídeos marcados para baixar. Os vídeos que você deixou desmarcados não são baixados, e a playlist sai da Fila. O X da linha descarta a playlist.
 
-Buscar até limita a enumeração solicitada: 10, 50, 100, Todos os disponíveis ou Custom. O limite inicial é 10. Buscar itens começa uma enumeração explícita e tenta preservar entradas durante o processo. Parar busca interrompe a descoberta sem apagar o que já foi salvo.
+Itens por playlist (nas configurações) define quantos vídeos listar: Todos, 10 ou 50. O padrão é Todos. Subpasta por playlist guarda os vídeos de cada playlist em uma pasta separada, dentro do destino.
 
-Toda mídia acessível encaminha os tipos acessíveis para a tentativa normal de vídeo/áudio. Vídeos com tipo identificado e Com áudio confirmado usam somente informações conhecidas; entradas sem metadados suficientes não são classificadas por suposição. Outros tipos que o pipeline de vídeo/MP3 não atende são indicados como não suportados.
+Uma listagem parcial não prova que todos os vídeos foram encontrados. Se uma playlist ainda tem vídeos em andamento, espere terminarem antes de adicionar mais da mesma lista.
 
-Criar subpasta da coleção cria uma subpasta identificada pela coleção. O modo, a conversão e a pasta principais são copiados para os novos itens quando você enfileira o lote. Alterá-los não modifica tarefas já criadas.
+## 4. Fila e Concluídos
 
-Uma descoberta parcial não prova que todas as entradas foram encontradas. Repetir a descoberta reconcilia IDs conhecidos; não equivale a retomar um cursor de paginação universal.
+> Atenção: Os downloads concluídos saem da lista depois de 12 dias. Os arquivos baixados nunca são apagados.
 
-## 4. Smart Batch: trabalhar com perfis grandes
+A aba Fila mostra o que está acontecendo: BAIXANDO (com barra de progresso e velocidade), AGUARDANDO e COM PROBLEMA (falhas, fontes em pausa e cancelados). A aba Concluídos mostra os downloads prontos, agrupados por dia, com busca por título.
 
-> Atenção: Um lote de 50 não limita a descoberta a 50 requisições. O limite da descoberta e o tamanho do lote controlam processos diferentes.
+Os números nas abas mostram quantos itens há em cada uma. Quando um download termina, ele passa sozinho da Fila para Concluídos.
 
-Itens por lote define quantas entradas elegíveis serão adicionadas à fila. O padrão é 50, com um download simultâneo. Para um teste inicial de perfil, reduza também o lote, por exemplo para 10.
+Em Concluídos, o botão de reproduzir abre o arquivo, a pasta mostra o arquivo no Explorer e o X remove só a linha da lista. Limpar lista remove todas as linhas concluídas; os arquivos continuam na pasta. Se um arquivo foi movido ou apagado, a linha avisa e oferece Tentar de novo.
 
-Adicionar lote à fila transforma entradas descobertas em tarefas. Iniciar downloads / Retomar fila começa a fila. O próximo lote exige uma nova ação manual quando não houver itens pendentes ou pausados do lote atual. Falhas permanecem disponíveis para Tentar novamente.
+Uma linha concluída sai da lista automaticamente depois de 12 dias. Isso afeta apenas a lista, não os arquivos.
 
-Você pode descobrir 100 entradas e baixar lotes de 10 ou 50, sem reenumerar a coleção a cada lote. Não é necessário escolher Todos os disponíveis para usar lotes.
+## 5. Pausar, cancelar, remover e tentar de novo
 
-Exemplo conservador: descubra 10, baixe 10, confira os arquivos e o comportamento da fonte. Depois, se adequado, aumente o limite para 50 e execute Buscar itens novamente. IDs já vistos são reconciliados.
+> Atenção: Cancelar ou remover pode apagar arquivos temporários e exigir nova transferência. Pausar é a opção indicada para continuar depois.
 
-Coleções com milhares de entradas dependem do extrator. A lógica de persistência e reconciliação foi testada com 2.005 entradas simuladas; isso não garante a extração de milhares de itens de qualquer perfil real.
+Adicionar um item já inicia o download. O botão Pausar, acima da lista, interrompe o processo ativo e conserva os parciais; Retomar continua de onde parou, conforme o servidor e o formato permitirem. Em uma nova sessão, a fila abre parada.
 
-## 5. Pausar, cancelar, remover e tentar novamente
+O X de um item em andamento cancela o download e limpa os parciais dele. O X de um item aguardando remove o item da fila. Arquivos finais já salvos nunca são apagados por esses botões.
 
-> Atenção: Cancelar ou remover pode apagar arquivos temporários e exigir nova transferência desses dados. Pausar é a opção indicada para continuar depois.
+Tentar de novo recoloca uma falha, um item cancelado ou bloqueado na fila, desde que não esteja ativo. Uma fonte bloqueada precisa ser resolvida e liberada antes de voltar a receber solicitações.
 
-Pausar interrompe o processo ativo e conserva parciais. Iniciar downloads / Retomar fila retoma a fila; a retomada dos bytes depende do servidor e do formato. A fila abre parada depois de um reinício.
+Se preferir iniciar manualmente, desligue Iniciar ao adicionar nas configurações e use o botão Baixar tudo.
 
-Cancelar itens cancela itens ativos ou pendentes selecionados. Os parciais da tarefa são limpos; uma fonte já concluída é preservada para recuperação de conversão. Uma confirmação explica o efeito antes da operação.
-
-Remover da fila remove tarefas da fila e limpa seus temporários. Uma tarefa ativa é cancelada antes da remoção. Arquivos finais e histórico não são apagados por esse botão.
-
-Tentar novamente recoloca uma falha, item pausado/cancelado ou bloqueado em espera para nova tentativa, desde que não esteja ativo. Uma fonte bloqueada precisa ser resolvida e liberada antes de voltar a receber requisições.
-
-Limpar concluídos remove tarefas concluídas da lista, preservando o histórico e os arquivos. Essa ação não libera espaço dos vídeos já baixados.
-
-A fila tem filtros com contadores: Todos, Em andamento (downloads e conversões), Aguardando, Concluídos, Com erro e Pausados/cancelados. Eles mudam apenas a visualização; não removem nem interrompem tarefas. As barras mostram a porcentagem real quando há um total conhecido. Sem total significa que o motor ainda não informou o tamanho completo. Use Ver detalhes para o erro completo, Abrir arquivo para reproduzir uma saída concluída ou Abrir pasta para localizá-la. Se o arquivo foi apagado, a linha avisa que ele está ausente e permite tentar novamente.
-
-## 6. Modos e conversão para Premiere
+## 6. Formatos e qualidade
 
 > Atenção: Converter exige CPU, espaço adicional e tempo. O programa mantém a fonte para recuperar falhas; confira o destino e o espaço disponível.
 
-Vídeo + áudio busca vídeo e áudio. Vídeo sem áudio produz um arquivo sem faixa de áudio; se a fonte vier com áudio junto, o FFmpeg remove essa faixa. Áudio MP3 extrai e converte o áudio.
+O menu de formato, na primeira etiqueta abaixo do campo, tem:
 
-Preparar para Premiere é uma opção independente para os modos de vídeo. Ela gera H.264 em MP4, pixels yuv420p e, quando aplicável, áudio AAC. O modo Video Only continua sem áudio após a conversão.
+MP4: vídeo + áudio, o padrão.
+Premiere: H.264 em MP4, pixels yuv420p e áudio AAC, para abrir bem em editores.
+GIF: um trecho do vídeo convertido em GIF. Ao escolher, defina o início, a duração (até 60 s) e a largura. Só o trecho é baixado.
+MP3: apenas o áudio, compatível com tudo.
+WAV: áudio sem perda, para edição.
+Miniatura: só a imagem de capa em JPG.
 
-No modo MP3 a conversão Premiere fica desabilitada. Os formatos são tratados como variantes distintas no histórico.
+A etiqueta de qualidade (Melhor, 1080p, 720p, 480p) aparece nos formatos de vídeo e limita a altura do vídeo. A mesma mídia em outro formato, outra qualidade ou outro trecho de GIF conta como um download diferente.
 
-Se o download terminar e a conversão falhar, use Tentar novamente: a fonte local ainda existente é reutilizada. Se ela foi apagada ou movida, poderá ser necessário baixar novamente. Os temporários e fontes de recuperação ficam dentro de .baixaki, na pasta de destino.
+Se o download terminar e a conversão falhar, Tentar de novo reutiliza a fonte local. Os temporários ficam na subpasta .baixaki do destino.
 
-Um arquivo H.264 compatível não garante que todas as versões do Premiere aceitarão toda combinação de mídia ou configuração. Confira o resultado no seu editor.
+Um arquivo H.264 compatível não garante que todas as versões do Premiere aceitem qualquer combinação de mídia. Confira o resultado no seu editor.
 
-## 7. Smart Download e prevenção de duplicatas
+## 7. Espera entre itens e duplicatas
 
-> Atenção: Aumentar o intervalo pode reduzir a frequência de acesso, mas não garante permissão nem evita restrições do serviço.
+> Atenção: Aumentar a espera pode reduzir a frequência de acesso, mas não garante permissão nem evita restrições do serviço.
 
-Intervalo (segundos) controla a espera entre itens e o intervalo solicitado ao yt-dlp entre requisições de extração. O padrão é 5 segundos; a interface aceita de 1 a 120. Um download pode envolver outras transferências internas do motor.
+Espera entre itens controla o intervalo entre downloads e entre requisições do yt-dlp. No modo Automático, é de 1 segundo quando há menos de 10 itens abertos na fila e de 5 segundos a partir disso. Você também pode fixar 1, 3, 5, 10 ou 30 segundos. A análise de um link nunca espera.
 
-Há um download simultâneo. Para falhas reconhecidas como transitórias, o programa permite até duas novas tentativas com espera conservadora. Erros permanentes não recebem esse ciclo automático.
+Há um download por vez. Para falhas temporárias, o programa tenta mais duas vezes, com espera conservadora. Erros permanentes não são repetidos sozinhos.
 
-Ignorar arquivos já baixados evita duplicatas na fila e em resultados já concluídos quando consegue identificar o item e a variante. O arquivo de saída precisa continuar existindo. Identificadores estáveis do extrator são usados quando disponíveis; a URL serve de alternativa.
+Pular já baixados evita baixar de novo um vídeo que já existe na pasta, no mesmo formato e qualidade. O arquivo precisa continuar existindo. Se você apagar ou mover o arquivo, uma nova inclusão baixa de novo.
 
-O arquivo de downloads usado pelo yt-dlp é preparado por tarefa e variante a partir de saídas conhecidas ainda existentes. MP3, vídeo sem áudio e conversões não são tratados como o mesmo resultado.
-
-Se apagar uma saída, uma nova inclusão pode baixá-la novamente. Se mover o arquivo sem atualizar o estado, o programa pode considerá-lo ausente. Não apague ou edite o estado manualmente enquanto a aplicação estiver aberta.
+Não apague nem edite o arquivo de estado manualmente enquanto o aplicativo estiver aberto.
 
 ## 8. Cookies do navegador e privacidade
 
 > Atenção: Cookies podem dar acesso à sua sessão. As requisições feitas com eles podem afetar sua conta. Use apenas um perfil seu e somente quando necessário.
 
-Cookies do navegador é opcional e começa em Não usar em cada sessão. Ao escolher um navegador, um aviso explica o acesso antes de ativá-lo.
+Cookies do navegador, nas configurações, é opcional e começa em Não usar a cada sessão. Ao escolher um navegador, um aviso explica o acesso antes de ativá-lo.
 
-O yt-dlp tentará ler os cookies do navegador escolhido usando seu mecanismo de suporte. Isso depende do navegador, do perfil padrão, das proteções do Windows e da versão do motor. O Baixaki não oferece campos para senhas, tokens, arquivos de cookies ou seleção de perfis personalizados.
+O yt-dlp tentará ler os cookies do navegador escolhido. Isso depende do navegador, do perfil padrão, das proteções do Windows e da versão do motor. O Baixaki não tem campos para senhas, tokens, arquivos de cookies ou seleção de perfis.
 
-Os valores dos cookies não são copiados para a fila, para o histórico ou para os registros do aplicativo. A escolha de navegador também não é persistida entre sessões. Diagnósticos sensíveis são ocultados.
+Os valores dos cookies não são copiados para a fila, o histórico ou o registro. A escolha de navegador também não é salva entre sessões.
 
-Prefira Não usar para conteúdo público quando funcionar. Uma sessão autenticada não garante acesso nem permissão para enumerar um perfil. Não cole URLs que contenham senhas ou tokens; o programa rejeita credenciais embutidas e parâmetros comuns de autenticação.
+Prefira Não usar para conteúdo público. Uma sessão autenticada não garante acesso nem permissão para listar um perfil. O programa rejeita links com senhas ou tokens embutidos.
 
-Ao compartilhar um erro, revise também nomes de arquivos, títulos, pastas e capturas de tela para evitar divulgar informações privadas.
+Ao compartilhar um erro, revise também nomes de arquivos, títulos, pastas e capturas de tela.
 
-## 9. Limites de acesso e fontes bloqueadas
+## 9. Limites de acesso e fontes em pausa
 
-> Atenção: Revisar fontes em pausa não resolve um bloqueio no serviço. Liberar repetidamente e tentar de novo pode agravar a restrição.
+> Atenção: Liberar uma fonte não resolve um bloqueio no serviço. Liberar repetidamente e tentar de novo pode agravar a restrição.
 
-Um erro claro de limite, autenticação ou desafio de acesso coloca a fonte em espera. Os novos itens da mesma fonte permanecem sem processamento; trabalhos de outras fontes podem continuar.
+Um erro claro de limite, autenticação ou desafio de acesso coloca a fonte em pausa. Os novos itens da mesma fonte ficam sem processamento; downloads de outras fontes continuam.
 
-Quando o yt-dlp expõe Retry-After nos diagnósticos, o prazo é registrado e não pode ser removido antes do vencimento. O aplicativo não inspeciona cabeçalhos que o motor não disponibiliza.
+Quando o yt-dlp informa um prazo (Retry-After), ele é registrado e não pode ser removido antes de vencer.
 
-Sem um prazo utilizável, a espera exige revisão manual. Verifique a causa pelo acesso normal ao serviço. Espere quando houver limite; use cookies somente quando o acesso autenticado for apropriado e permitido. CAPTCHA e outras verificações devem ser resolvidos pelos meios normais do serviço.
+Sem prazo, a liberação é manual. Verifique a causa pelo acesso normal ao serviço, espere quando houver limite e só então use Fontes em pausa, na área Diagnóstico das configurações (o botão só aparece quando há uma fonte em pausa). Depois, use Tentar de novo nos itens bloqueados.
 
-Depois de resolver a causa, Revisar fontes em pausa pede confirmação. Use Tentar novamente nos itens bloqueados e depois Iniciar downloads / Retomar fila. Não há tentativas de contornar controles de acesso.
-
-Fontes são agrupadas pelo domínio da página, com associação à coleção original. Isso é uma proteção conservadora; o aplicativo não conhece necessariamente o escopo exato de uma restrição de conta ou de IP.
+As fontes são agrupadas pelo domínio da página. Isso é uma proteção conservadora: o aplicativo não sabe o alcance exato de uma restrição de conta ou de IP.
 
 ## 10. Estado, histórico e cópia de segurança
 
-> Atenção: Apagar state.json ou a pasta .baixaki pode perder a fila ou impedir a retomada. Feche o programa antes de fazer manutenção manual.
+> Atenção: Apagar o arquivo de estado ou a pasta .baixaki pode perder a fila ou impedir a retomada. Feche o programa antes de qualquer manutenção manual.
 
-As preferências, tarefas, coleções e histórico ficam em %APPDATA%\Baixaki\state.json. As gravações substituem o arquivo de forma atômica e mantêm state.json.bak. Se a leitura falhar, o programa tenta a cópia e avisa no registro.
+As preferências, a fila, as playlists e o histórico ficam em %APPDATA%\Baixaki\state.json. As gravações substituem o arquivo de forma segura e mantêm state.json.bak. Se a leitura falhar, o programa tenta a cópia e avisa no registro. O botão Dados do app, nas configurações, abre essa pasta.
 
-Para uma cópia de segurança, feche o Baixaki e copie a pasta %APPDATA%\Baixaki. Se quiser manter a recuperação de transferências e conversões, preserve também as pastas de destino e suas subpastas .baixaki.
+Para uma cópia de segurança, feche o Baixaki e copie a pasta %APPDATA%\Baixaki. Para manter a recuperação de transferências, preserve também as pastas de destino e suas subpastas .baixaki.
 
-Itens interrompidos voltam pausados. A descoberta interrompida volta como parcial. A fila não começa a fazer downloads automaticamente ao abrir o aplicativo.
+Itens interrompidos voltam pausados. A fila não começa a baixar sozinha ao abrir o aplicativo.
 
-A opção de destino da versão anterior em folder.txt é migrada quando ainda não existe um novo estado utilizável. Alterar Salvar em afeta novas tarefas; itens existentes conservam sua pasta original.
+As miniaturas ficam em um cache em %APPDATA%\Baixaki\thumbs, apagado sozinho depois de 12 dias. Mudar a pasta padrão afeta só os novos downloads.
 
-Os arquivos de estado podem conter URLs públicas fornecidas, títulos e caminhos locais. Não os publique indiscriminadamente. Credenciais não devem ser incluídas nas URLs.
+Os arquivos de estado podem conter links públicos, títulos e caminhos locais. Não os publique indiscriminadamente.
 
-## 11. Atualizar motor e aplicativo
+## 11. Atualizar o motor e o aplicativo
 
 > Atenção: Atualizações substituem executáveis. Atualizar o motor pode mudar o comportamento dos extratores; instalar uma atualização do aplicativo fecha a aplicação.
 
-Atualizar yt-dlp executa a atualização oficial do yt-dlp. Pausar a fila, pare a descoberta e aguarde o término dos processos antes de atualizar. Essa ação não atualiza o FFmpeg nem o Baixaki.
+O yt-dlp se atualiza sozinho, no máximo uma vez por dia, quando nada está sendo baixado. Em Configurações, o botão Verificar ao lado do yt-dlp faz a verificação na hora. Essa ação não atualiza o FFmpeg nem o Baixaki.
 
-Atualizações do Baixaki consulta as releases de TheOrionEXE/Baixaki. Se houver versão mais recente com BaixakiSetup.exe, o programa pede confirmação para baixar e executar o instalador. A fila é salva durante o fechamento e abre parada na nova sessão.
+O botão Verificar ao lado do Baixaki consulta as versões publicadas em TheOrionEXE/Baixaki. Se houver uma versão mais nova com BaixakiSetup.exe, o programa pede confirmação para baixar e executar o instalador. A fila é salva ao fechar e abre parada na nova sessão.
 
-O aplicativo instalado por usuário normalmente permite atualizar o motor sem elevação. Uma pasta sem permissão de escrita pode impedir a atualização.
+O aplicativo instalado por usuário normalmente atualiza o motor sem permissão de administrador. Uma pasta sem permissão de escrita pode impedir a atualização.
 
-Se você compila o projeto, build.bat gera o executável; build-installer.bat gera o instalador. Esses scripts não publicam nada no GitHub.
-
-A atualização real pela rede e a instalação sobre todas as versões antigas não foram executadas nos testes desta entrega. Os testes cobrem o comando, a compilação e a compatibilidade estática do instalador.
+Se você compila o projeto, build.bat gera o executável e build-installer.bat gera o instalador. Esses scripts não publicam nada no GitHub.
 
 ## 12. Diagnóstico e solução de problemas
 
-> Atenção: Não compartilhe cookies, senhas, tokens, URLs privadas ou arquivos de estado completos ao pedir suporte.
+> Atenção: Não compartilhe cookies, senhas, tokens, links privados ou arquivos de estado completos ao pedir suporte.
 
-Analysis unavailable: atualize o yt-dlp se apropriado e tente novamente; se o recurso for conhecido, selecione Um vídeo / áudio ou Collection manualmente. Uma escolha manual não supera restrições.
+Não foi possível identificar o link: atualize o yt-dlp (Configurações > Verificar) e tente de novo. Confirme que a página abre normalmente no navegador.
 
-Empty / unsupported: o extrator não retornou entradas acessíveis. Confira a URL, o acesso normal à página e o suporte do motor. Não repita tentativas em massa.
+Link não suportado: o motor informou um endereço sem suporte ou um extrator quebrado. O programa não trata isso como pedido de login. Prefira links de vídeos individuais.
 
-Partial: as entradas já descobertas foram mantidas, mas a enumeração não foi confirmada como completa. Revise o erro, a fonte e o limite antes de Buscar itens novamente.
+Lista incompleta: os vídeos já encontrados foram mantidos, mas a listagem não foi confirmada como completa. Revise o erro e a fonte antes de listar de novo.
 
-No eligible entries: o filtro pode excluir metadados desconhecidos ou as entradas já podem ter sido enfileiradas. Revise Toda mídia acessível e os estados da coleção.
+Falha na conversão (Premiere ou GIF): confira o espaço, as permissões e a presença do FFmpeg. Tentar de novo reutiliza a fonte mantida. Falha de pasta: escolha um destino com permissão de gravação.
 
-Falha Premiere: confira espaço, permissões e a presença do FFmpeg. Tentar novamente reutiliza a fonte mantida. Falha de pasta: selecione um destino gravável para novas tarefas.
+O botão Registro, nas configurações, mostra o registro técnico da sessão, sem links, cookies ou credenciais.
 
-Para relatar um problema, informe versão do Baixaki, versão do yt-dlp, modo escolhido, passos para reproduzir e o erro já revisado. Identifique o serviço e o tipo de recurso sem fornecer dados privados.
-
-Link não suportado: o motor informou URL sem suporte ou extrator quebrado. O programa não o trata como um pedido de login. Prefira links individuais atendidos pelo motor; uma coleção não é garantida para toda plataforma.
-
+Para relatar um problema, informe a versão do Baixaki, a versão do yt-dlp, o formato escolhido, os passos para reproduzir e o erro já revisado. Identifique o serviço e o tipo de recurso sem dados privados.

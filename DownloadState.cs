@@ -5,17 +5,29 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 
-public enum MediaMode { VideoAudio, VideoOnly, Mp3 }
+public enum MediaMode { VideoAudio, VideoOnly, Mp3, Gif, Wav, Thumbnail }
 public class DownloadItem
 {
     public string Id = Guid.NewGuid().ToString("N"), Url, OriginalUrl, Title, Extractor, MediaId, CollectionId;
     public MediaMode Mode;
     public bool Premiere, RemoveWhenStopped;
     public string Destination, SourceFile, OutputFile, Status = "Pending", Error = "", Speed = "";
+    public string Thumb, Channel, Quality = "best";
+    public int Duration, GifStart, GifDuration = 8, GifWidth = 480;
     public double? Percent;
     public DateTime Created = DateTime.UtcNow, Updated = DateTime.UtcNow;
     public int Attempts;
-    public string Variant { get { return Mode.ToString() + (Premiere && Mode != MediaMode.Mp3 ? "-Premiere" : ""); } }
+    public bool UsePremiere { get { return Premiere && (Mode == MediaMode.VideoAudio || Mode == MediaMode.VideoOnly); } }
+    public bool IsVideoMode { get { return Mode == MediaMode.VideoAudio || Mode == MediaMode.VideoOnly; } }
+    public string Variant
+    {
+        get
+        {
+            return Mode.ToString() + (UsePremiere ? "-Premiere" : "")
+                + (IsVideoMode && !String.IsNullOrEmpty(Quality) && Quality != "best" ? "-" + Quality : "")
+                + (Mode == MediaMode.Gif ? "-" + GifStart + "-" + GifDuration + "-" + GifWidth : "");
+        }
+    }
     public string Key { get { return Identity(Extractor, MediaId, Url) + "|" + Variant; } }
     public static string Identity(string extractor, string id, string url)
     {
@@ -25,8 +37,9 @@ public class DownloadItem
 }
 public class CollectionEntry
 {
-    public string Id, Extractor, Url, Title, Kind = "Unknown", Status = "Discovered";
-    public bool HasAudio;
+    public string Id, Extractor, Url, Title, Kind = "Unknown", Status = "Discovered", Thumb, Channel;
+    public bool HasAudio, Skip;
+    public int Duration;
     public string Key { get { return DownloadItem.Identity(Extractor, Id, Url); } }
 }
 public class CollectionJob
@@ -35,7 +48,8 @@ public class CollectionJob
     public string Status = "Ready", Error = "", Filter = "All accessible media";
     public MediaMode Mode;
     public bool Premiere, OwnFolder;
-    public int Limit = 10, BatchSize = 50, BatchNumber;
+    public int Limit = 0, BatchSize = 100000, BatchNumber;
+    public string Thumb;
     public List<CollectionEntry> Entries = new List<CollectionEntry>();
     public DateTime Created = DateTime.UtcNow;
 }
@@ -54,8 +68,11 @@ public class DownloadState
     public int Schema = 1;
     public string Destination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
     public MediaMode Mode;
-    public bool Premiere, Duplicates = true;
-    public int PaceSeconds = 5;
+    public bool Premiere, Duplicates = true, PaceAuto = true, AutoStart = true, OwnFolder = true;
+    public int PaceSeconds = 5, DefaultLimit = 0, KeepCompletedDays = 12;
+    public string Quality = "best";
+    public int GifStart, GifDuration = 8, GifWidth = 480;
+    public DateTime? LastEngineCheck;
     public List<DownloadItem> Queue = new List<DownloadItem>();
     public List<CollectionJob> Collections = new List<CollectionJob>();
     public List<HistoryEntry> History = new List<HistoryEntry>();

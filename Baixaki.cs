@@ -1,44 +1,71 @@
-// Native Windows Forms; build with the Windows .NET Framework compiler.
+﻿// Native Windows Forms; build with the Windows .NET Framework compiler.
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+
+// Single line under the input: shows what was recognized (thumbnail, title, details) or the current hint/error.
+class PreviewStrip : Control
+{
+    public string Thumb = "", Title = "", Sub = "";
+    public Color Tone = Theme.Muted;
+    public PreviewStrip() { SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true); Height = Theme.S(66); BackColor = Theme.Bg; }
+    public void ShowMedia(string thumb, string title, string sub, Color tone)
+    {
+        if (Thumb == thumb && Title == title && Sub == sub && Tone == tone) return;
+        Thumb = thumb ?? ""; Title = title ?? ""; Sub = sub ?? ""; Tone = tone; Invalidate();
+    }
+    public void Message(string text, bool error) { ShowMedia("", "", text, error ? Theme.Warn : Theme.Muted); }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics; g.Clear(Theme.Bg);
+        if (Title.Length == 0) { ModernPaint.Text(g, Sub, Theme.Font(10F), new Rectangle(Theme.S(4), 0, Width - Theme.S(8), Height), Tone); return; }
+        int th = Theme.S(48), tw = th * 16 / 9;
+        var r = new Rectangle(Theme.S(4), (Height - th) / 2, tw, th);
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        Bitmap bmp = ThumbCache.Get(Thumb);
+        using (var path = ModernPaint.Round(r, Theme.S(6)))
+        {
+            if (bmp != null) { var state = g.Save(); g.SetClip(path, System.Drawing.Drawing2D.CombineMode.Intersect); g.DrawImage(bmp, r); g.Restore(state); }
+            else { using (var brush = new SolidBrush(Theme.Placeholder(Title))) g.FillPath(brush, path); ModernPaint.Icon(g, Glyph.Play, r, Color.FromArgb(150, 255, 255, 255), 12F); }
+        }
+        int lh = Theme.S(22);
+        ModernPaint.Text(g, Title, Theme.Font(11F), new Rectangle(r.Right + Theme.S(14), r.Y - Theme.S(1), Width - r.Right - Theme.S(18), lh), Theme.Ink);
+        ModernPaint.Text(g, Sub, Theme.Font(9.5F), new Rectangle(r.Right + Theme.S(14), r.Y + lh, Width - r.Right - Theme.S(18), lh), Tone);
+    }
+}
 
 partial class BaixakiForm : Form
 {
     static readonly string AppVersion = AppInfo.Version;
     const string UpdateRepo = "TheOrionEXE/Baixaki";
-    static readonly Color Muted = Color.FromArgb(162,169,189);
-    static readonly Color Bg = Color.FromArgb(18,20,26), Surface = Color.FromArgb(31,35,46), Secondary = Color.FromArgb(42,47,62), Accent = Color.FromArgb(214,48,180), Ink = Color.FromArgb(235,237,245);
     readonly DownloadManager manager;
-    TextBox txtUrl, destination;
-    TextBox log;
-    Button btnDownload, start, pause, engine, analyze;
-    ComboBox mode, resourceMode, cookies, jobs, filter, limit;
-    CheckBox premiere, duplicates, ownFolder;
-    NumericUpDown pace, batch, customLimit;
-    DataGridView queue;
-    Label resource, collectionSummary, queueSummary;
-    FlowLayoutPanel collectionPanel, advancedPanel;
-    Control collectionHost, queueActions;
-    FlowLayoutPanel queueFilters;
-    string queueScope = "all";
-    readonly HashSet<string> checkedItems = new HashSet<string>();
-    bool refreshingChecks;
-    readonly System.Collections.Generic.Dictionary<string,Button> scopeButtons = new System.Collections.Generic.Dictionary<string,Button>();
-    Button openFileButton, openFolderButton;
-    Label emptyQueue;
-    Button discoverButton, nextBatch, stopDiscovery, retrySelection, cancelSelection, removeSelection, clearCompleted, detailsButton, releaseHolds;
+    PillInput urlInput, searchInput;
+    FlatButton formatChip, qualityChip, gifChip, folderChip, startButton, clearButton, gearButton;
+    TabStrip tabs;
+    RowList list;
+    PreviewStrip preview;
+    BufferedPanel header, chipRow, tabRow, settingsPanel;
+    Label creditLabel, engineVersionLabel;
+    FlatButton holdsButton;
+    readonly ToolTip tips = new ToolTip { AutoPopDelay = 12000, InitialDelay = 500 };
+    readonly StringBuilder logText = new StringBuilder();
+    readonly HashSet<string> expanded = new HashSet<string>();
+    readonly List<Action> settingsRefresh = new List<Action>();
     CancellationTokenSource analysis;
+    Task analysisTask;
+    string analysisFor, analyzedUrl, unsupportedUrl;
     ResourceInfo currentResource;
-    bool refreshing, closing, shuttingDown, userSized, resizing;
-    TableLayoutPanel contentLayout;
-    string analyzedUrl, unsupportedUrl;
+    readonly Dictionary<string, ResourceInfo> analysisCache = new Dictionary<string, ResourceInfo>();
+    bool closing, shuttingDown, resizing, refreshing, keepAnalysis;
     System.Windows.Forms.Timer debounce, refresh;
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr handle, int attr, ref int value, int size);
     [STAThread] static void Main()
@@ -49,373 +76,557 @@ partial class BaixakiForm : Form
     public BaixakiForm() : this(new StateStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Baixaki")), new EngineRunner(), true) { }
     public BaixakiForm(StateStore store, EngineRunner runner, bool startup = false)
     {
-        manager=new DownloadManager(store,runner);
-        Text="Baixaki — v"+AppVersion;Font=new Font("Segoe UI",11F);BackColor=Bg;ForeColor=Ink;
-        AutoScaleMode=AutoScaleMode.Dpi;ClientSize=new Size(1120,760);MinimumSize=new Size(820,560);StartPosition=FormStartPosition.CenterScreen;
-        try{Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);}catch{}
-        var scrollHost=new BufferedPanel{Dock=DockStyle.Fill,AutoScroll=true};Controls.Add(scrollHost);
-        var root=new BufferedTable{Dock=DockStyle.Top,AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=1,RowCount=9,Padding=new Padding(18),BackColor=Bg};
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));for(int i=0;i<9;i++)root.RowStyles.Add(new RowStyle(i==5?SizeType.Absolute:SizeType.AutoSize,i==5?250:0));scrollHost.Controls.Add(root);contentLayout=root;
-        var header=Row();
-        if(Icon!=null)header.Controls.Add(new PictureBox{Image=Icon.ToBitmap(),Size=new Size(44,44),SizeMode=PictureBoxSizeMode.Zoom,Margin=new Padding(0,0,12,0)});
-        header.Controls.Add(new Label{Text="Baixaki",Font=new Font("Segoe UI Semibold",25F),AutoSize=true,Margin=new Padding(0,0,12,0)});
-        header.Controls.Add(Label("v"+AppVersion+"  ·  Vídeos, áudios e coleções"));
-        header.Controls.Add(Button("Central de ajuda  ·  F1",delegate{OpenHelp();}));
-        var headerFrame=new HeaderLayout{Dock=DockStyle.Top,AutoSize=true,ColumnCount=2,BackColor=Bg,Margin=new Padding(0)};headerFrame.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));headerFrame.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));headerFrame.Controls.Add(header,0,0);
-        var attribution=new Label{Text="Created by OrionEXE",Name="CreatorCredit",AutoSize=true,ForeColor=Muted,Anchor=AnchorStyles.Top|AnchorStyles.Right,Margin=new Padding(12,0,0,0)};headerFrame.Controls.Add(attribution,1,0);root.Controls.Add(headerFrame,0,0);
-
-        var inputCard=new UiCard();inputCard.Add(Heading("Link para download"));
-        var input=new BufferedTable{Dock=DockStyle.Top,AutoSize=true,ColumnCount=3,BackColor=Surface};
-        input.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));input.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));input.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        txtUrl=TextField();txtUrl.Font=new Font(Font.FontFamily,12F);input.Controls.Add(FieldFrame(txtUrl,300),0,0);
-        analyze=AsyncButton("Analisar link",async delegate{await Analyze();});input.Controls.Add(analyze,1,0);
-        btnDownload=AsyncButton("Adicionar à fila",async delegate{await AddUrl();});btnDownload.BackColor=Accent;input.Controls.Add(btnDownload,2,0);inputCard.Add(input);
-        resource=Label("Cole um link de vídeo ou coleção. A análise é automática; os downloads começam somente quando você iniciar a fila.");resource.ForeColor=Muted;resource.Margin=new Padding(0,8,0,0);
-        inputCard.Resize+=delegate{resource.MaximumSize=new Size(Math.Max(200,inputCard.ClientSize.Width-34),0);};inputCard.Add(resource);root.Controls.Add(inputCard,0,1);
-
-        var settingsCard=new UiCard();settingsCard.Add(Heading("Formato e destino"));
-        var settings=Row();settings.Controls.Add(Label("Baixar como"));mode=Combo("Vídeo + áudio","Vídeo sem áudio","Áudio MP3");mode.Width=180;mode.SelectedIndex=(int)manager.State.Mode;settings.Controls.Add(mode);
-        premiere=new CheckBox{Text="Preparar para Premiere",Checked=manager.State.Premiere,AutoSize=true,Margin=new Padding(15,11,7,5)};settings.Controls.Add(premiere);
-        var folder=settings;folder.Controls.Add(Label("Salvar em"));destination=TextField();destination.ReadOnly=true;destination.Text=manager.State.Destination;var destinationFrame=FieldFrame(destination,300);destinationFrame.Dock=DockStyle.None;folder.Controls.Add(destinationFrame);
-        folder.Controls.Add(Button("Escolher pasta…",delegate{using(var dialog=new FolderBrowserDialog{Description="Escolha a pasta para os novos downloads",SelectedPath=manager.State.Destination})if(dialog.ShowDialog(this)==DialogResult.OK){manager.State.Destination=dialog.SelectedPath;destination.Text=dialog.SelectedPath;PersistSettings();}}));settingsCard.Add(folder);root.Controls.Add(settingsCard,0,2);
-
-        var advancedCard=new UiCard();var advancedHeader=Row();var advancedToggle=Button("Opções avançadas  ▾",delegate{});advancedHeader.Controls.Add(advancedToggle);advancedHeader.Controls.Add(Label("Intervalo, duplicatas, tipo do link e autenticação opcional"));advancedCard.Add(advancedHeader);
-        advancedPanel=Row();advancedPanel.Visible=false;
-        advancedPanel.Controls.Add(Label("Tipo do link"));resourceMode=Combo("Detectar automaticamente","Um vídeo / áudio","Coleção de itens");resourceMode.Width=215;advancedPanel.Controls.Add(resourceMode);
-        advancedPanel.Controls.Add(Label("Intervalo (segundos)"));pace=Number(1,120,manager.State.PaceSeconds);advancedPanel.Controls.Add(pace);
-        duplicates=new CheckBox{Text="Ignorar arquivos já baixados",Checked=manager.State.Duplicates,AutoSize=true,Margin=new Padding(12,11,7,5)};advancedPanel.Controls.Add(duplicates);
-        advancedPanel.SetFlowBreak(duplicates,true);
-        var cookieGroup=new BufferedTable{AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,ColumnCount=1,RowCount=2,Margin=new Padding(4,8,4,4),BackColor=Color.Transparent};
-        cookieGroup.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));cookieGroup.RowStyles.Add(new RowStyle(SizeType.AutoSize));cookieGroup.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var cookieHeader=Row();cookieHeader.Controls.Add(Label("Cookies do navegador"));cookies=Combo("Não usar","chrome","edge","firefox","brave","opera","vivaldi","chromium");cookies.Width=170;cookieHeader.Controls.Add(cookies);cookieGroup.Controls.Add(cookieHeader,0,0);
-        var authHint=Label("Opcional: associa as consultas à sua conta. Use apenas se precisar de login. Cookies não corrigem um extrator sem suporte.");authHint.Name="CookieExplanation";authHint.ForeColor=Muted;authHint.MaximumSize=new Size(630,0);authHint.Margin=new Padding(5,0,5,5);cookieGroup.Controls.Add(authHint,0,1);
-        cookieGroup.Name="CookieSettings";advancedPanel.Controls.Add(cookieGroup);advancedCard.Add(advancedPanel);
-        advancedToggle.Click+=delegate{advancedPanel.Visible=!advancedPanel.Visible;advancedToggle.Text=advancedPanel.Visible?"Opções avançadas  ▴":"Opções avançadas  ▾";FitWindowToContent();};root.Controls.Add(advancedCard,0,3);
-
-        var collectionCard=new UiCard();collectionCard.Visible=false;
-        collectionPanel=Row();collectionPanel.Margin=new Padding(0);collectionCard.Add(collectionPanel);
-        var collectionTitle=Heading("Coleção de mídia");collectionPanel.Controls.Add(collectionTitle);jobs=Combo();jobs.Width=310;collectionPanel.Controls.Add(jobs);collectionPanel.SetFlowBreak(jobs,true);
-        collectionPanel.Controls.Add(Label("Buscar até"));limit=Combo("10","50","100","Todos os disponíveis","Quantidade personalizada");limit.SelectedIndex=0;limit.Width=220;collectionPanel.Controls.Add(limit);
-        customLimit=Number(1,1000000,2000);customLimit.Visible=false;collectionPanel.Controls.Add(customLimit);
-        collectionPanel.Controls.Add(Label("Itens por lote"));batch=Number(1,10000,50);collectionPanel.Controls.Add(batch);
-        ownFolder=new CheckBox{Text="Criar subpasta da coleção",AutoSize=true,Margin=new Padding(12,11,7,5)};collectionPanel.Controls.Add(ownFolder);collectionPanel.SetFlowBreak(ownFolder,true);
-        collectionPanel.Controls.Add(Label("Incluir"));filter=Combo("Toda mídia acessível","Vídeos com tipo identificado","Com áudio confirmado","Outros tipos: não suportados");filter.Width=265;collectionPanel.Controls.Add(filter);
-        discoverButton=AsyncButton("Buscar itens",async delegate{await Discover();});collectionPanel.Controls.Add(discoverButton);
-        nextBatch=Button("Adicionar lote à fila",delegate{QueueBatch();});nextBatch.BackColor=Accent;collectionPanel.Controls.Add(nextBatch);
-        stopDiscovery=Button("Parar busca",delegate{manager.StopDiscovery();});collectionPanel.Controls.Add(stopDiscovery);collectionPanel.SetFlowBreak(stopDiscovery,true);
-        collectionSummary=Label("Uma busca consulta a fonte. Revise o limite e o aviso antes de continuar.");collectionSummary.ForeColor=Muted;collectionPanel.Controls.Add(collectionSummary);
-        collectionCard.Resize+=delegate{collectionPanel.MaximumSize=new Size(Math.Max(200,collectionCard.ClientSize.Width-32),0);collectionSummary.MaximumSize=collectionPanel.MaximumSize;};
-        collectionHost=collectionCard;root.Controls.Add(collectionCard,0,4);
-
-        var queueCard=new UiCard{Dock=DockStyle.Fill,AutoSize=false};queueCard.RowStyles.Clear();queueCard.RowCount=3;queueCard.RowStyles.Add(new RowStyle(SizeType.AutoSize));queueCard.RowStyles.Add(new RowStyle(SizeType.AutoSize));queueCard.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-        var queueHeader=Row();queueHeader.Controls.Add(Heading("Sua fila"));start=AsyncButton("Iniciar downloads",async delegate{await Guard(async delegate{await manager.Start();});});start.BackColor=Accent;queueHeader.Controls.Add(start);
-        pause=Button("Pausar",delegate{manager.Pause();});queueHeader.Controls.Add(pause);queueSummary=Label("");queueSummary.ForeColor=Muted;queueHeader.Controls.Add(queueSummary);queueCard.Controls.Add(queueHeader,0,0);
-        queueFilters=Row();
-        foreach(string key in new[]{"all","active","pending","done","failed","stopped"})
+        manager = new DownloadManager(store, runner);
+        Text = "Baixaki — v" + AppVersion; Font = Theme.Font(10F); BackColor = Theme.Bg; ForeColor = Theme.Ink; KeyPreview = true; DoubleBuffered = true;
+        // Default window fits the screen: a large readable layout, never larger than the working area.
+        Rectangle work = Screen.PrimaryScreen.WorkingArea;
+        AutoScaleMode = AutoScaleMode.None; MinimumSize = new Size(Math.Min(Theme.S(820), work.Width - 40), Math.Min(Theme.S(620), work.Height - 80));
+        ClientSize = new Size(Math.Min(Theme.S(980), work.Width - 80), Math.Min(Theme.S(700), work.Height - 120)); StartPosition = FormStartPosition.CenterScreen;
+        if (AppIcon.Window != null) Icon = AppIcon.Window;
+        BuildLayout(); BuildSettings(); Wire();
+        manager.Log = Log; manager.Changed = delegate { if (InvokeRequired) { try { BeginInvoke(new Action(RefreshUi)); } catch { } } else RefreshUi(); };
+        Activated += delegate { if (startup) FillClipboard(); };
+        Shown += delegate
         {
-            string scope=key;var button=Button("",delegate{queueScope=scope;RefreshQueue();});button.Font=new Font(Font.FontFamily,11F);scopeButtons.Add(scope,button);queueFilters.Controls.Add(button);
-        }
-        queueCard.Controls.Add(queueFilters,0,1);
-        queue=new BufferedGrid{Dock=DockStyle.Fill,ReadOnly=false,EditMode=DataGridViewEditMode.EditOnEnter,AllowUserToAddRows=false,AllowUserToDeleteRows=false,AllowUserToResizeRows=false,AutoGenerateColumns=false,BackgroundColor=Surface,BorderStyle=BorderStyle.None,RowHeadersVisible=false,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=true,EnableHeadersVisualStyles=false,MinimumSize=new Size(0,145),CellBorderStyle=DataGridViewCellBorderStyle.SingleHorizontal,ColumnHeadersBorderStyle=DataGridViewHeaderBorderStyle.None,GridColor=Color.FromArgb(44,50,63)};
-        queue.DefaultCellStyle.BackColor=Surface;queue.DefaultCellStyle.ForeColor=Ink;queue.DefaultCellStyle.SelectionBackColor=Color.FromArgb(65,43,74);queue.DefaultCellStyle.SelectionForeColor=Ink;
-        queue.ColumnHeadersDefaultCellStyle.BackColor=Secondary;queue.ColumnHeadersDefaultCellStyle.ForeColor=Muted;queue.ColumnHeadersDefaultCellStyle.Font=new Font(Font,FontStyle.Bold);queue.ColumnHeadersHeight=38;queue.ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.DisableResizing;queue.RowTemplate.Height=38;queue.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;
-        queue.Columns.Add(new DataGridViewCheckBoxColumn{Name="Marked",HeaderText="✓",Width=38,AutoSizeMode=DataGridViewAutoSizeColumnMode.None,ReadOnly=false,SortMode=DataGridViewColumnSortMode.NotSortable});
-        AddColumn("Título",32);AddColumn("Fonte",12);AddColumn("Formato",23);AddColumn("Situação",15);AddColumn("Progresso",10);AddColumn("Velocidade",12);AddColumn("Detalhes do erro",20);queue.Columns[7].Visible=false;
-        emptyQueue=new Label{Text="Nenhum download na fila.\nCole um link acima e escolha Adicionar à fila.",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,ForeColor=Muted,BackColor=Surface};queue.Controls.Add(emptyQueue);
-        queue.CurrentCellDirtyStateChanged+=delegate{if(queue.IsCurrentCellDirty&&queue.CurrentCell!=null&&queue.CurrentCell.ColumnIndex==0)queue.CommitEdit(DataGridViewDataErrorContexts.Commit);};
-        queue.CellValueChanged+=delegate(object sender,DataGridViewCellEventArgs e){if(refreshingChecks||e.RowIndex<0||e.ColumnIndex!=0)return;var item=queue.Rows[e.RowIndex].Tag as DownloadItem;if(item==null)return;if(Convert.ToBoolean(queue.Rows[e.RowIndex].Cells[0].Value))checkedItems.Add(item.Id);else checkedItems.Remove(item.Id);RefreshSummary();};
-        queue.ColumnHeaderMouseClick+=delegate(object sender,DataGridViewCellMouseEventArgs e){if(e.ColumnIndex!=0)return;var visible=queue.Rows.Cast<DataGridViewRow>().Select(r=>r.Tag as DownloadItem).Where(q=>q!=null).ToList();bool mark=visible.Any(q=>!checkedItems.Contains(q.Id));foreach(var item in visible){if(mark)checkedItems.Add(item.Id);else checkedItems.Remove(item.Id);}RefreshQueue();};
-        queue.SelectionChanged+=delegate{RefreshSummary();};queue.CellPainting+=PaintQueueProgress;queue.CellDoubleClick+=delegate(object sender,DataGridViewCellEventArgs e){if(e.RowIndex>=0)ShowItemDetails();};queueCard.Controls.Add(queue,0,2);root.Controls.Add(queueCard,0,5);
-        var controls=Row();queueActions=controls;retrySelection=Button("Tentar novamente",delegate{Selected(delegate(DownloadItem item){if(new[]{"Failed","Cancelled","Paused","Blocked"}.Contains(item.Status)||(item.Status=="Completed"&&!File.Exists(item.OutputFile)))manager.Retry(item);});});controls.Controls.Add(retrySelection);
-        cancelSelection=Button("Cancelar itens",delegate{if(ConfirmQueueAction("Cancelar","Interrompe os itens selecionados e limpa seus arquivos parciais. Para continuar depois sem perder esses parciais, prefira Pausar. Uma fonte já concluída é preservada."))Selected(delegate(DownloadItem item){if(new[]{"Pending","Paused","Downloading","Converting"}.Contains(item.Status))manager.Cancel(item);});});controls.Controls.Add(cancelSelection);
-        removeSelection=Button("Remover da fila",delegate{if(ConfirmQueueAction("Remover","Remove os itens selecionados e limpa seus temporários. Arquivos finais e histórico são preservados. Tarefas ativas serão canceladas primeiro."))Selected(delegate(DownloadItem item){manager.Remove(item);});});controls.Controls.Add(removeSelection);
-        clearCompleted=Button("Limpar concluídos",delegate{manager.State.Queue.RemoveAll(q=>q.Status=="Completed");manager.Save();RefreshQueue();});controls.Controls.Add(clearCompleted);
-        detailsButton=Button("Ver detalhes",delegate{ShowItemDetails();});controls.Controls.Add(detailsButton);releaseHolds=Button("Revisar fontes em pausa",delegate{ReleaseHolds();});controls.Controls.Add(releaseHolds);openFileButton=Button("Abrir arquivo",delegate{OpenOutput(false);});controls.Controls.Add(openFileButton);openFolderButton=Button("Abrir pasta",delegate{OpenOutput(true);});controls.Controls.Add(openFolderButton);root.Controls.Add(controls,0,6);
-
-        var activity=new UiCard();var tools=Row();var activityToggle=Button("Atividade técnica  ▾",delegate{});tools.Controls.Add(activityToggle);
-        engine=AsyncButton("Atualizar yt-dlp",async delegate{await Guard(manager.UpdateEngine);});tools.Controls.Add(engine);tools.Controls.Add(Button("Atualizações do Baixaki",delegate{CheckForUpdate(true);}));activity.Add(tools);
-        log=new TextBox{Multiline=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Top,Height=125,ReadOnly=true,BackColor=Bg,ForeColor=Muted,Font=new Font("Consolas",10F),BorderStyle=BorderStyle.None,Visible=false};activity.Add(log);
-        activityToggle.Click+=delegate{log.Visible=!log.Visible;activityToggle.Text=log.Visible?"Ocultar atividade  ▴":"Atividade técnica  ▾";FitWindowToContent();};root.Controls.Add(activity,0,7);
-        HelpRequested+=delegate(object sender,HelpEventArgs e){OpenHelp();e.Handled=true;};manager.Log=Log;manager.Changed=delegate{if(!resizing)RefreshSummary();};
-        mode.SelectedIndexChanged+=delegate{premiere.Enabled=mode.SelectedIndex!=2;PersistSettings();};premiere.Enabled=mode.SelectedIndex!=2;
-        premiere.CheckedChanged+=delegate{PersistSettings();};pace.ValueChanged+=delegate{PersistSettings();};duplicates.CheckedChanged+=delegate{PersistSettings();};resourceMode.SelectedIndexChanged+=delegate{RefreshSummary();};
-        cookies.SelectedIndexChanged+=delegate
-        {
-            if(cookies.SelectedIndex>0&&MessageBox.Show(this,"O yt-dlp tentará ler cookies do navegador e usá-los nas próximas consultas. Isso pode associar o acesso à sua conta e causar restrições. Cookies não corrigem suporte ausente ou quebrado.\n\nA escolha vale somente nesta sessão; valores não são salvos pelo Baixaki. Usar esse navegador?","Autenticação opcional",MessageBoxButtons.YesNo,MessageBoxIcon.Warning,MessageBoxDefaultButton.Button2)!=DialogResult.Yes){cookies.SelectedIndex=0;return;}
-            manager.Browser=cookies.SelectedIndex==0?"":cookies.Text;
+            if (!startup) return;
+            ThumbCache.CleanOld(manager.State.KeepCompletedDays);
+            FillClipboard(); if (store.Warning != null) Log(store.Warning);
+            manager.PruneCompleted(manager.State.KeepCompletedDays); RefreshUi(); CheckForUpdate();
+            var later = new System.Windows.Forms.Timer { Interval = 6000 }; later.Tick += async delegate { later.Stop(); later.Dispose(); await AutoUpdateEngine(); };
+            later.Start(); RefreshEngineVersion();
         };
-        jobs.SelectedIndexChanged+=delegate{LoadCollection();};limit.SelectedIndexChanged+=delegate{customLimit.Visible=limit.SelectedIndex==4;};
-        filter.SelectedIndexChanged+=delegate{if(filter.SelectedIndex==3)Log("Outros tipos de mídia não são atendidos pela conversão de vídeo/MP3. Escolha um dos filtros de vídeo ou áudio.");};
-        EventHandler saveCollection=delegate{if(!refreshing&&CurrentJob()!=null&&!manager.Discovering)SaveCollection(CurrentJob());};filter.SelectedIndexChanged+=saveCollection;limit.SelectedIndexChanged+=saveCollection;customLimit.ValueChanged+=saveCollection;batch.ValueChanged+=saveCollection;ownFolder.CheckedChanged+=saveCollection;
-        debounce=new System.Windows.Forms.Timer{Interval=850};debounce.Tick+=async delegate{debounce.Stop();if(Safety.ValidUrl(txtUrl.Text.Trim()))await Analyze();};
-        txtUrl.TextChanged+=delegate{debounce.Stop();if(analysis!=null)analysis.Cancel();currentResource=null;unsupportedUrl=null;resource.Text="Aguardando análise do link…";resource.ForeColor=Muted;debounce.Start();RefreshSummary();};
-        refresh=new System.Windows.Forms.Timer{Interval=600};refresh.Tick+=delegate{RefreshQueue();};refresh.Start();
-        Activated+=delegate{if(startup)FillClipboard();};Shown+=delegate{if(!startup)return;FillClipboard();if(store.Warning!=null)Log(store.Warning);RefreshCollections(null);RefreshQueue();CheckForUpdate();};FormClosing+=HandleClosing;ResizeBegin+=delegate{userSized=true;resizing=true;refresh.Stop();};ResizeEnd+=delegate{resizing=false;refresh.Start();RefreshQueue();};Shown+=delegate{FitWindowToContent();};
-        var tips=new ToolTip{AutoPopDelay=12000,InitialDelay=400,ReshowDelay=150};
-        tips.SetToolTip(btnDownload,"Adiciona um item à fila ou abre o painel de uma coleção. Não inicia downloads automaticamente.");tips.SetToolTip(start,"Processa a fila em sequência. Itens bloqueados pela fonte aguardam revisão.");tips.SetToolTip(pause,"Interrompe o processo ativo e preserva os arquivos parciais para retomada.");tips.SetToolTip(filter,"Filtros específicos exigem metadados do extrator. Toda mídia acessível inclui entradas com tipo ainda desconhecido.");tips.SetToolTip(queue,"Duplo clique em um item para ver o arquivo, o destino e o erro completo.");FormClosed+=delegate{tips.Dispose();};
-        RefreshQueue();
+        var wheel = new WheelRedirect(); Application.AddMessageFilter(wheel); FormClosed += delegate { Application.RemoveMessageFilter(wheel); };
+        FormClosing += HandleClosing;
+        ResizeBegin += delegate { resizing = true; }; ResizeEnd += delegate { resizing = false; RefreshUi(); };
+        RefreshUi();
     }
+    protected override CreateParams CreateParams { get { var cp = base.CreateParams; cp.ExStyle |= 0x02000000; return cp; } }
     protected override void OnHandleCreated(EventArgs e)
-    { base.OnHandleCreated(e); try { int on = 1; DwmSetWindowAttribute(Handle,20,ref on,4); } catch { } }
-    FlowLayoutPanel Row() { return new BufferedFlow { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Top, WrapContents = true, Margin = new Padding(0,3,0,3), BackColor = Color.Transparent }; }
-    Label Label(string text) { return new Label { Text = text, AutoSize = true, Margin = new Padding(5,9,7,5) }; }
-    TextBox TextField() { return new TextBox { BackColor = Surface, ForeColor = Ink, BorderStyle = BorderStyle.None, Margin = new Padding(0) }; }
-    ComboBox Combo(params string[] values)
+    { base.OnHandleCreated(e); try { int on = 1; DwmSetWindowAttribute(Handle, 20, ref on, 4); } catch { } }
+
+    // ---------- layout ----------
+    void BuildLayout()
     {
-        var combo = new ModernCombo { DropDownStyle = ComboBoxStyle.DropDownList, BackColor = Secondary, ForeColor = Ink, FlatStyle = FlatStyle.Flat, Width = 195, Margin = new Padding(4,5,4,5) };
-        combo.Items.AddRange(values); if (values.Length > 0) combo.SelectedIndex = 0; return combo;
+        var body = new BufferedPanel { Dock = DockStyle.Fill, Padding = new Padding(Theme.S(26), Theme.S(6), Theme.S(26), Theme.S(22)), BackColor = Theme.Bg };
+        Controls.Add(body);
+        list = new RowList { Dock = DockStyle.Fill, EmptyTitle = "Nada na fila", EmptySub = "Cole um link acima e pressione Enter." };
+        tabRow = new BufferedPanel { Dock = DockStyle.Top, Height = Theme.S(54), BackColor = Theme.Bg };
+        preview = new PreviewStrip { Dock = DockStyle.Top };
+        chipRow = new BufferedPanel { Dock = DockStyle.Top, Height = Theme.S(48), BackColor = Theme.Bg };
+        var inputRow = new BufferedPanel { Dock = DockStyle.Top, Height = Theme.S(64), BackColor = Theme.Bg, Padding = new Padding(0, Theme.S(4), 0, Theme.S(8)) };
+        header = new BufferedPanel { Dock = DockStyle.Top, Height = Theme.S(62), BackColor = Theme.Bg };
+        body.Controls.Add(list); body.Controls.Add(tabRow); body.Controls.Add(preview); body.Controls.Add(chipRow); body.Controls.Add(inputRow); body.Controls.Add(header);
+
+        // header: logo, name, version; credit and settings on the right
+        creditLabel = new Label { Text = "Created by OrionEXE", Name = "CreatorCredit", AutoSize = true, ForeColor = Theme.Muted, Font = Theme.Font(9.5F), BackColor = Theme.Bg };
+        gearButton = new FlatButton { Kind = BtnKind.Ghost, Icon = Glyph.Settings, Width = Theme.S(40), Height = Theme.S(38), AutoFit = false };
+        tips.SetToolTip(gearButton, "Configurações");
+        header.Controls.Add(creditLabel); header.Controls.Add(gearButton);
+        header.Paint += delegate(object sender, PaintEventArgs e)
+        {
+            int logo = Theme.S(36);
+            if (AppIcon.Logo != null) { e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic; e.Graphics.DrawImage(AppIcon.Logo, new Rectangle(0, (header.Height - logo) / 2, logo, logo)); }
+            Font titleFont = Theme.Font(17F, true); Size title = TextRenderer.MeasureText("Baixaki", titleFont, new Size(int.MaxValue, 200), TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(e.Graphics, "Baixaki", titleFont, new Point(logo + Theme.S(10), (header.Height - title.Height) / 2), Theme.Ink, TextFormatFlags.NoPadding);
+            Font versionFont = Theme.Font(9.5F); Size version = TextRenderer.MeasureText("v" + AppVersion, versionFont, new Size(int.MaxValue, 200), TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(e.Graphics, "v" + AppVersion, versionFont, new Point(logo + Theme.S(10) + title.Width + Theme.S(10), (header.Height - version.Height) / 2 + Theme.S(3)), Theme.Muted, TextFormatFlags.NoPadding);
+        };
+        header.Resize += delegate { PlaceHeader(); };
+        PlaceHeader();
+        preview.Message("Cole um link do YouTube, TikTok, Instagram e de outros sites compatíveis com o yt-dlp.", false);
+
+        urlInput = new PillInput { Dock = DockStyle.Fill, Placeholder = "Cole um link de vídeo ou playlist" };
+        urlInput.Button.Text = "Adicionar";
+        inputRow.Controls.Add(urlInput);
+
+        formatChip = new FlatButton { Kind = BtnKind.Chip, Dropdown = true, Icon = Glyph.Video };
+        qualityChip = new FlatButton { Kind = BtnKind.Chip, Dropdown = true };
+        gifChip = new FlatButton { Kind = BtnKind.Chip };
+        folderChip = new FlatButton { Kind = BtnKind.Chip, Icon = Glyph.Folder };
+        chipRow.Controls.Add(formatChip); chipRow.Controls.Add(qualityChip); chipRow.Controls.Add(gifChip); chipRow.Controls.Add(folderChip);
+        chipRow.Resize += delegate { PlaceChips(); };
+
+        tabs = new TabStrip { Location = new Point(0, Theme.S(8)) };
+        startButton = new FlatButton { Kind = BtnKind.Primary, Text = "Baixar tudo", Icon = Glyph.Download, Height = Theme.S(38) };
+        clearButton = new FlatButton { Kind = BtnKind.Secondary, Text = "Limpar lista", Height = Theme.S(38) };
+        searchInput = new PillInput { Placeholder = "Buscar", IconGlyph = Glyph.Search, ShowButton = false, Width = Theme.S(210), Height = Theme.S(38), Visible = false };
+        tabRow.Controls.Add(tabs); tabRow.Controls.Add(startButton); tabRow.Controls.Add(clearButton); tabRow.Controls.Add(searchInput);
+        tabRow.Resize += delegate { PlaceTabRow(); };
+        UpdateChips(); PlaceTabRow();
     }
-    NumericUpDown Number(int min, int max, int value) { return new NumericUpDown { Minimum = min, Maximum = max, Value = Math.Max(min,Math.Min(max,value)), Width = 75, BackColor = Surface, ForeColor = Ink, Margin = new Padding(4,6,4,5) }; }
-    Button Button(string text, Action action)
+    void PlaceHeader()
     {
-        var button = new ModernButton { Text = text, AutoSize = true, MinimumSize = new Size(0,32), FlatStyle = FlatStyle.Flat, BackColor = Secondary, ForeColor = Ink, Margin = new Padding(3) };
-        button.FlatAppearance.BorderSize = 0; button.Click += delegate { try { action(); } catch (Exception ex) { Feedback(ex is UnsupportedResourceException ? UiText.Unsupported : "Não foi possível concluir: " + Safety.Redact(ex.Message),true); } }; return button;
+        gearButton.Location = new Point(header.Width - gearButton.Width, (header.Height - gearButton.Height) / 2);
+        creditLabel.Location = new Point(gearButton.Left - creditLabel.Width - Theme.S(10), (header.Height - creditLabel.Height) / 2);
     }
-    Button AsyncButton(string text, Func<Task> action)
+    bool showQuality, showGif;
+    // Visible is false for every control until the window is shown, so the layout tracks which chips apply by itself.
+    void PlaceChips()
     {
-        var button = Button(text, delegate { });
-        button.Click += async delegate { await Guard(action); }; return button;
+        int x = 0;
+        foreach (var entry in new[] { new KeyValuePair<FlatButton, bool>(formatChip, true), new KeyValuePair<FlatButton, bool>(qualityChip, showQuality),
+            new KeyValuePair<FlatButton, bool>(gifChip, showGif), new KeyValuePair<FlatButton, bool>(folderChip, true) })
+        { if (!entry.Value) continue; entry.Key.Location = new Point(x, Theme.S(5)); x += entry.Key.Width + Theme.S(8); }
     }
-    Label Heading(string text){return new Label{Text=text,AutoSize=true,Font=new Font("Segoe UI Semibold",12F),Margin=new Padding(0,2,10,9)};}
-    Panel FieldFrame(TextBox box,int width)
+    void PlaceTabRow()
     {
-        var panel=new Panel{Dock=DockStyle.Fill,Width=width,Height=42,BackColor=Secondary,Padding=new Padding(10,11,10,8),Margin=new Padding(0,3,8,3)};box.BackColor=Secondary;box.Dock=DockStyle.Fill;panel.Controls.Add(box);return panel;
+        int right = tabRow.Width, y = Theme.S(7);
+        startButton.Location = new Point(right - startButton.Width, y); clearButton.Location = new Point(right - clearButton.Width, y);
+        searchInput.Location = new Point(clearButton.Left - Theme.S(10) - searchInput.Width, y);
     }
-    List<DownloadItem> TargetItems()
+    void UpdateChips()
     {
-        if(checkedItems.Count>0)return manager.State.Queue.Where(q=>checkedItems.Contains(q.Id)).ToList();
-        return queue.SelectedRows.Cast<DataGridViewRow>().Select(r=>r.Tag as DownloadItem).Where(q=>q!=null).ToList();
+        var state = manager.State;
+        formatChip.Text = UiText.Format(state.Mode, state.Premiere);
+        bool video = state.Mode == MediaMode.VideoAudio || state.Mode == MediaMode.VideoOnly;
+        showQuality = video; qualityChip.Visible = video; qualityChip.Text = UiText.Quality(state.Quality);
+        showGif = state.Mode == MediaMode.Gif; gifChip.Visible = showGif; gifChip.Text = "Trecho " + Clock(state.GifStart) + " · " + state.GifDuration + " s · " + state.GifWidth + " px";
+        string name = Path.GetFileName((state.Destination ?? "").TrimEnd('\\', '/'));
+        folderChip.Text = String.IsNullOrEmpty(name) ? state.Destination : name;
+        tips.SetToolTip(folderChip, "Pasta de destino: " + state.Destination + "\nClique para escolher outra.");
+        PlaceChips();
     }
-    void ShowItemDetails()
+    static string Clock(int seconds) { return (seconds / 60) + ":" + (seconds % 60).ToString("00"); }
+
+    // ---------- events ----------
+    void Wire()
     {
-        var targets=TargetItems();if(targets.Count!=1)return;var item=targets[0];
-        MessageBox.Show(this,(item.Title??"Mídia")+"\n\nSituação: "+UiText.Status(item.Status)+"\nFormato: "+UiText.Mode(item.Mode,item.Premiere)+"\nDestino: "+item.Destination+"\nArquivo: "+(item.OutputFile??"Ainda não concluído")+(String.IsNullOrEmpty(item.Error)?"":"\n\nErro informado pelo motor:\n"+item.Error),"Detalhes do download",MessageBoxButtons.OK,MessageBoxIcon.Information);
+        HelpRequested += delegate(object sender, HelpEventArgs e) { OpenHelp(); e.Handled = true; };
+        urlInput.Submit += async delegate { await Guard(AddUrl); };
+        urlInput.Button.Click += async delegate { await Guard(AddUrl); };
+        debounce = new System.Windows.Forms.Timer { Interval = 350 };
+        debounce.Tick += async delegate { debounce.Stop(); if (Safety.ValidUrl(urlInput.Box.Text.Trim())) await Guard(delegate { return StartAnalysis(urlInput.Box.Text.Trim()); }); };
+        urlInput.Box.TextChanged += delegate
+        {
+            debounce.Stop(); if (analysis != null && !keepAnalysis) analysis.Cancel(); currentResource = null; unsupportedUrl = null; analyzedUrl = null; analysisFor = null;
+            string text = urlInput.Box.Text.Trim();
+            if (text.Length == 0) preview.Message("Cole um link do YouTube, TikTok, Instagram e de outros sites compatíveis com o yt-dlp.", false);
+            else if (!Safety.ValidUrl(text)) preview.Message("Use um link http(s) de página, sem senha ou token no endereço.", true);
+            else { preview.Message("Analisando o link…", false); debounce.Start(); }
+        };
+        formatChip.Click += delegate { ShowFormatMenu(); };
+        qualityChip.Click += delegate { ShowQualityMenu(); };
+        gifChip.Click += delegate { EditGif(); };
+        folderChip.Click += delegate { ChooseFolder(); };
+        gearButton.Click += delegate { ToggleSettings(); };
+        tabs.SelectedChanged += delegate { list.EmptyTitle = tabs.Selected == 0 ? "Nada na fila" : "Nenhum download concluído"; RefreshUi(); };
+        startButton.Click += delegate { if (manager.Running) manager.Pause(); else StartQueue(); RefreshUi(); };
+        clearButton.Click += delegate
+        {
+            manager.State.Queue.RemoveAll(q => q.Status == "Completed"); manager.Save(); RefreshUi();
+        };
+        searchInput.Box.TextChanged += delegate { RefreshUi(); };
+        list.ActionInvoked += async delegate(RowItem row, string action) { await Guard(delegate { return HandleRowAction(row, action); }); };
+        refresh = new System.Windows.Forms.Timer { Interval = 500 }; refresh.Tick += delegate { if (!resizing) RefreshUi(); }; refresh.Start();
+        var hourly = new System.Windows.Forms.Timer { Interval = 3600000 }; hourly.Tick += delegate { manager.PruneCompleted(manager.State.KeepCompletedDays); }; hourly.Start();
+        FormClosed += delegate { hourly.Dispose(); tips.Dispose(); };
     }
-    void OpenHelp() { using (var help = new HelpCenterForm()) help.ShowDialog(this); }
-    void AddColumn(string title, int weight) { queue.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = title, FillWeight = weight, ReadOnly = true, SortMode = DataGridViewColumnSortMode.NotSortable }); }
-    void PersistSettings()
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        if (refreshing || mode == null || premiere == null || pace == null || duplicates == null) return;
-        manager.State.Mode = (MediaMode)mode.SelectedIndex; manager.State.Premiere = premiere.Checked && mode.SelectedIndex != 2; manager.State.PaceSeconds = (int)pace.Value; manager.State.Duplicates = duplicates.Checked;
+        if (keyData == Keys.Escape && settingsPanel != null && settingsPanel.Visible) { ToggleSettings(); return true; }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    // ---------- menus ----------
+    void ShowFormatMenu()
+    {
+        var menu = DarkMenu.Create(); var s = manager.State;
+        DarkMenu.Header(menu, "VÍDEO");
+        DarkMenu.Item(menu, "MP4", "Padrão, vídeo + áudio", s.Mode == MediaMode.VideoAudio && !s.Premiere, delegate { SetFormat(MediaMode.VideoAudio, false); });
+        DarkMenu.Item(menu, "Premiere", "H.264, abre em qualquer editor", s.Mode == MediaMode.VideoAudio && s.Premiere, delegate { SetFormat(MediaMode.VideoAudio, true); });
+        DarkMenu.Item(menu, "GIF", "Escolha o trecho", s.Mode == MediaMode.Gif, delegate { SetFormat(MediaMode.Gif, false); });
+        DarkMenu.Header(menu, "ÁUDIO");
+        DarkMenu.Item(menu, "MP3", "Compatível com tudo", s.Mode == MediaMode.Mp3, delegate { SetFormat(MediaMode.Mp3, false); });
+        DarkMenu.Item(menu, "WAV", "Sem perda, para edição", s.Mode == MediaMode.Wav, delegate { SetFormat(MediaMode.Wav, false); });
+        DarkMenu.Header(menu, "OUTROS");
+        DarkMenu.Item(menu, "Miniatura", "Só a imagem de capa", s.Mode == MediaMode.Thumbnail, delegate { SetFormat(MediaMode.Thumbnail, false); });
+        menu.Show(formatChip, new Point(0, formatChip.Height + 4));
+    }
+    void SetFormat(MediaMode mode, bool premiere)
+    {
+        manager.State.Mode = mode; manager.State.Premiere = premiere; Persist(); UpdateChips();
+        if (mode == MediaMode.Gif) EditGif();
+    }
+    void ShowQualityMenu()
+    {
+        var menu = DarkMenu.Create(); string current = manager.State.Quality ?? "best";
+        foreach (string q in new[] { "best", "1080", "720", "480" })
+        { string value = q; DarkMenu.Item(menu, UiText.Quality(value), "", current == value, delegate { manager.State.Quality = value; Persist(); UpdateChips(); }); }
+        menu.Show(qualityChip, new Point(0, qualityChip.Height + 4));
+    }
+    void EditGif()
+    {
+        var s = manager.State;
+        using (var dialog = new GifDialog(s.GifStart, s.GifDuration, s.GifWidth))
+            if (dialog.ShowDialog(this) == DialogResult.OK) { s.GifStart = dialog.StartSeconds; s.GifDuration = dialog.LengthSeconds; s.GifWidth = dialog.WidthPixels; Persist(); UpdateChips(); }
+    }
+    void ChooseFolder()
+    {
+        using (var dialog = new FolderBrowserDialog { Description = "Escolha a pasta para os novos downloads", SelectedPath = manager.State.Destination })
+            if (dialog.ShowDialog(this) == DialogResult.OK) { manager.State.Destination = dialog.SelectedPath; Persist(); UpdateChips(); foreach (var refresher in settingsRefresh) refresher(); }
+    }
+    void Persist()
+    {
+        if (refreshing) return;
         try { manager.Save(); } catch (Exception ex) { Log("Não foi possível salvar as configurações: " + Safety.Redact(ex.Message)); }
     }
-    void FillClipboard()
+
+    // ---------- link analysis and adding ----------
+    static string UnsupportedMessage(string url)
     {
-        try { if (txtUrl.Text.Trim().Length == 0 && Clipboard.ContainsText() && Safety.ValidUrl(Clipboard.GetText().Trim())) txtUrl.Text = Clipboard.GetText().Trim(); } catch { }
+        return DownloadManager.IsInstagramProfile(url) ? "Perfis do Instagram não são suportados no momento. Cole o link de um post ou reel." : "Este link não é atendido pelo yt-dlp instalado. Links de vídeos individuais ainda podem funcionar.";
     }
-    void Log(string text)
+    Task StartAnalysis(string url)
     {
-        if (IsDisposed || shuttingDown) return;
-        if (InvokeRequired) { try { BeginInvoke(new Action<string>(Log),text); } catch { } return; }
-        if (log.TextLength > 100000) log.Clear();
-        log.AppendText(Safety.Redact(UiText.Message(text)) + Environment.NewLine); log.SelectionStart = log.TextLength; log.ScrollToCaret();
+        if (analysisFor == url && analysisTask != null && !analysisTask.IsCompleted) return analysisTask;
+        if (analysis != null) analysis.Cancel();
+        analysisFor = url; analysisTask = AnalyzeCore(url); return analysisTask;
     }
-    async Task Guard(Func<Task> action)
-    { try { await action(); } catch (OperationCanceledException) { } catch (Exception ex) { Feedback(ex is UnsupportedResourceException ? UiText.Unsupported : "Não foi possível concluir: " + Safety.Redact(ex.Message),true); } }
-    async Task Analyze()
+    void ShowAnalysis(string url, ResourceInfo info)
     {
-        if (debounce != null) debounce.Stop();
-        string url = txtUrl.Text.Trim(); if (!Safety.ValidUrl(url)) { resource.Text = "Use um link HTTP(S) de página, sem senhas ou tokens embutidos."; return; }
-        if (analyzedUrl == url && currentResource != null) return;
-        if (analysis != null) { analysis.Cancel(); while (analysis != null) await Task.Delay(50); if (txtUrl.Text.Trim() != url) return; }
-        var cancellation = new CancellationTokenSource(); analysis = cancellation; analyze.Enabled = false;
-        unsupportedUrl = null;
-        resource.Text = "Analisando o link… Essa consulta não inicia o download.";resource.ForeColor=Muted;
+        currentResource = info; analyzedUrl = url;
+        string kind = info.IsCollection ? "Playlist ou coleção" : "Vídeo";
+        var parts = new List<string>();
+        if (!String.IsNullOrEmpty(info.Channel)) parts.Add(info.Channel);
+        if (!info.IsCollection && info.Duration > 0) parts.Add(Theme.Duration(info.Duration));
+        parts.Add(kind);
+        preview.ShowMedia(info.Thumb, String.IsNullOrEmpty(info.Title) ? "Mídia" : Safety.Redact(info.Title), String.Join(" · ", parts), Theme.Muted);
+    }
+    // Links that are certainly one video do not need to wait for the analysis: they join the queue at once.
+    static bool ClearlySingle(string url)
+    {
+        Uri uri; if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out uri)) return false;
+        string host = uri.Host.ToLowerInvariant(); if (host.StartsWith("www.")) host = host.Substring(4); if (host.StartsWith("m.")) host = host.Substring(2);
+        string path = uri.AbsolutePath, query = uri.Query; bool hasList = Regex.IsMatch(query, @"(^|[?&])list=");
+        if (host == "youtu.be") return !hasList && path.Length > 1;
+        if (host == "youtube.com") return (path == "/watch" && Regex.IsMatch(query, @"(^|[?&])v=") && !hasList) || path.StartsWith("/shorts/");
+        if (host == "instagram.com") return Regex.IsMatch(path, @"^/(p|reel|tv)/[^/]+");
+        if (host == "tiktok.com") return Regex.IsMatch(path, @"^/@[^/]+/video/\d+");
+        if (host == "x.com" || host == "twitter.com") return Regex.IsMatch(path, @"^/[^/]+/status/\d+");
+        if (host == "vimeo.com") return Regex.IsMatch(path, @"^/\d+");
+        return false;
+    }
+    async Task AddSingleNow(string url)
+    {
+        bool added = manager.Add(url, "", null, null, null);
+        if (!added) { Feedback("Este vídeo, neste formato, já está na fila ou foi baixado.", true); return; }
+        var item = manager.State.Queue.Last(); manager.Save();
+        keepAnalysis = true; ClearInput(); keepAnalysis = false;
+        tabs.Selected = 0; Feedback("Adicionado à fila.", false); if (manager.State.AutoStart) StartQueue();
+        await FillMetadata(item, url);
+    }
+    // Title, thumbnail and duration arrive after the item is already in the queue.
+    async Task FillMetadata(DownloadItem item, string url)
+    {
         try
         {
-            ResourceInfo info = await manager.Analyze(url,cancellation.Token);
-            if (txtUrl.Text.Trim() != url || cancellation.IsCancellationRequested) return;
-            currentResource = info; analyzedUrl = url;
-            resource.Text = info.Extractor + " • " + Safety.Redact(info.Title) + (info.IsCollection ? " · Coleção identificada — revise o painel abaixo" : " · Mídia individual — pronta para adicionar à fila");
-            if (info.IsCollection && resourceMode.SelectedIndex != 1)
+            ResourceInfo info; analysisCache.TryGetValue(url, out info);
+            if (info == null && analysisFor == url && analysisTask != null) { await analysisTask; analysisCache.TryGetValue(url, out info); }
+            if (info == null)
             {
-                var job = manager.CreateCollection(info); RefreshCollections(job.Id);
-                Log("Prévia de coleção aberta. Revise o limite e use Buscar itens para iniciar uma busca explícita.");
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60))) info = await manager.Analyze(url, cts.Token);
+                analysisCache[url] = info;
             }
+            if (IsDisposed || info == null || !manager.State.Queue.Contains(item)) return;
+            if (String.IsNullOrEmpty(item.Title)) item.Title = Safety.Redact(info.Title);
+            if (String.IsNullOrEmpty(item.Thumb)) item.Thumb = info.Thumb;
+            if (item.Duration == 0) item.Duration = info.Duration;
+            if (String.IsNullOrEmpty(item.Channel)) item.Channel = info.Channel;
+            if (String.IsNullOrEmpty(item.Extractor)) item.Extractor = info.Extractor;
+            if (String.IsNullOrEmpty(item.MediaId)) item.MediaId = info.Id;
+            manager.Save();
+        }
+        catch (Exception ex) { Log("Detalhes do vídeo indisponíveis por enquanto: " + Safety.Redact(ex.Message)); }
+    }
+    async Task AnalyzeCore(string url)
+    {
+        if (analyzedUrl == url && currentResource != null) return;
+        ResourceInfo cached;
+        if (analysisCache.TryGetValue(url, out cached)) { unsupportedUrl = null; ShowAnalysis(url, cached); return; }
+        var cancellation = new CancellationTokenSource(); analysis = cancellation; unsupportedUrl = null;
+        preview.Message("Analisando o link…", false);
+        try
+        {
+            ResourceInfo info = await manager.Analyze(url, cancellation.Token);
+            if (analysisCache.Count > 60) analysisCache.Clear();
+            analysisCache[url] = info;
+            if (urlInput.Box.Text.Trim() != url || cancellation.IsCancellationRequested) return;
+            ShowAnalysis(url, info);
         }
         catch (OperationCanceledException) { }
-        catch (UnsupportedResourceException) { unsupportedUrl = url; currentResource = null; Feedback(UiText.Unsupported,true); }
-        catch (Exception ex) { Feedback(manager.Held(url)?"A fonte está em pausa por uma restrição de acesso. Consulte a ajuda e resolva a causa antes de tentar novamente.":"Não foi possível identificar este link. Consulte a atividade técnica; se o tipo for conhecido, use Opções avançadas → Tipo do link.",true);Log(Safety.Redact(ex.Message)); }
-        finally { if (analysis == cancellation) analysis = null; cancellation.Dispose(); if (!IsDisposed) {analyze.Enabled = true;RefreshSummary();FitWindowToContent();} }
+        catch (UnsupportedResourceException) { if (urlInput.Box.Text.Trim() == url) { unsupportedUrl = url; currentResource = null; preview.Message(UnsupportedMessage(url), true); } }
+        catch (InvalidOperationException ex)
+        {
+            if (manager.Updating) { preview.Message("Atualizando o motor de download… tentando de novo em instantes.", false); if (debounce != null) { debounce.Interval = 2500; debounce.Start(); } }
+            else { preview.Message(manager.Held(url) ? "A fonte está em pausa por uma restrição de acesso. Veja a Ajuda antes de tentar de novo." : "Não foi possível analisar este link.", true); Log(Safety.Redact(ex.Message)); }
+        }
+        catch (Exception ex) { if (urlInput.Box.Text.Trim() == url) preview.Message("Não foi possível identificar este link. Veja o registro técnico nas configurações.", true); Log(Safety.Redact(ex.Message)); }
+        finally { if (analysis == cancellation) analysis = null; cancellation.Dispose(); if (debounce != null) debounce.Interval = 350; if (!IsDisposed) RefreshUi(); }
     }
     async Task AddUrl()
     {
-        debounce.Stop(); PersistSettings();
-        string url = txtUrl.Text.Trim(); if (!Safety.ValidUrl(url)) { Feedback("Cole um link HTTP(S) sem credenciais ou tokens.",true); return; }
-        if (unsupportedUrl == url) { Feedback(UiText.Unsupported,true); return; }
-        if (resourceMode.SelectedIndex == 0 && currentResource == null) await Analyze();
-        if (unsupportedUrl == url) return;
-        if (txtUrl.Text.Trim() != url) return;
-        bool collection = resourceMode.SelectedIndex == 2 || (resourceMode.SelectedIndex == 0 && currentResource != null && currentResource.IsCollection);
-        if (resourceMode.SelectedIndex == 0 && currentResource == null) { Feedback("Escolha o tipo em Opções avançadas → Tipo do link se souber o formato do recurso. Isso não corrige restrições de acesso.",true); return; }
-        if (collection)
+        debounce.Stop();
+        string url = urlInput.Box.Text.Trim();
+        if (!Safety.ValidUrl(url)) { Feedback("Cole um link http(s) sem senha ou token.", true); return; }
+        if (unsupportedUrl == url) { Feedback(UnsupportedMessage(url), true); return; }
+        if ((currentResource == null || analyzedUrl != url) && ClearlySingle(url) && !manager.Updating) { await AddSingleNow(url); RefreshUi(); return; }
+        if (currentResource == null || analyzedUrl != url) await StartAnalysis(url);
+        if (urlInput.Box.Text.Trim() != url || currentResource == null) return;
+        ResourceInfo info = currentResource;
+        if (info.IsCollection) await OpenCollection(info);
+        else
         {
-            var info = currentResource ?? new ResourceInfo { Url = url, Title = "Collection", Extractor = "Unknown", IsCollection = true };
-            var job = manager.CreateCollection(info); RefreshCollections(job.Id); SaveCollection(job);
-            Feedback("Coleção aberta. Revise as opções e use Buscar itens para consultar a fonte.",false);
+            bool added = manager.Add(url, String.IsNullOrEmpty(info.Title) ? "Mídia" : Safety.Redact(info.Title), info.Extractor, info.Id, null, info.Thumb, info.Duration, info.Channel);
+            manager.Save();
+            if (added) { ClearInput(); tabs.Selected = 0; Feedback("Adicionado à fila.", false); if (manager.State.AutoStart) StartQueue(); }
+            else Feedback("Este vídeo, neste formato, já está na fila ou foi baixado.", true);
+        }
+        RefreshUi();
+    }
+    void ClearInput()
+    {
+        urlInput.Box.Clear(); currentResource = null; analyzedUrl = null; unsupportedUrl = null; analysisFor = null;
+    }
+    static bool TrustedBulkHost(string url)
+    {
+        string host = Safety.Source(url); return host == "youtu.be" || host == "youtube.com" || host.EndsWith(".youtube.com");
+    }
+    async Task OpenCollection(ResourceInfo info)
+    {
+        var job = manager.CreateCollection(info); var s = manager.State;
+        job.OwnFolder = s.OwnFolder; job.Limit = s.DefaultLimit; job.Mode = s.Mode; job.Premiere = s.Premiere; job.Destination = s.Destination; job.Thumb = info.Thumb;
+        manager.Save(); expanded.Add(job.Id); ClearInput(); tabs.Selected = 0;
+        if (TrustedBulkHost(job.Url) && job.Entries.Count <= 1) { Feedback("Buscando os vídeos da playlist…", false); await DiscoverJob(job, false); }
+        else Feedback("Coleção aberta. Escolha os vídeos e adicione à fila.", false);
+        RefreshUi();
+    }
+    async Task DiscoverJob(CollectionJob job, bool confirm)
+    {
+        if (confirm && !TrustedBulkHost(job.Url))
+        {
+            string extent = job.Limit == 0 ? "todos os itens acessíveis" : "até " + job.Limit + " itens";
+            if (MessageBox.Show(this, "Perfis e coleções fora do YouTube podem gerar muitas solicitações e causar limites de acesso ou restrições na conta, principalmente com cookies.\n\nO yt-dlp tentará listar " + extent + ". A espera entre requisições reduz, mas não elimina, o risco.\n\nContinuar?", "Listar coleção", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+        }
+        var task = manager.Discover(job);
+        RefreshUi();
+        await task;
+    }
+    void StartQueue()
+    {
+        try { var ignored = manager.Start(); } catch (Exception ex) { Feedback("Não foi possível iniciar: " + Safety.Redact(ex.Message), true); }
+    }
 
+    // ---------- list model ----------
+    string Meta(DownloadItem q, bool withMode)
+    {
+        var parts = new List<string>();
+        if (withMode) parts.Add(UiText.Mode(q.Mode, q.Premiere) + (q.IsVideoMode && !String.IsNullOrEmpty(q.Quality) && q.Quality != "best" ? " " + q.Quality + "p" : ""));
+        if (!String.IsNullOrEmpty(q.Channel)) parts.Add(q.Channel);
+        return String.Join(" · ", parts);
+    }
+    RowItem ItemRow(DownloadItem q)
+    {
+        var row = new RowItem { Key = "item:" + q.Id, Kind = "item", Tag = q, ThumbUrl = q.Thumb ?? "", Badge = Theme.Duration(q.Duration),
+            Title = String.IsNullOrEmpty(q.Title) ? (q.Status == "Completed" || q.Status == "Failed" ? "Sem título" : "Carregando informações…") : q.Title };
+        string meta = Meta(q, true);
+        switch (q.Status)
+        {
+            case "Downloading":
+                row.State = 1; row.Progress = q.Percent; row.Right = q.Percent.HasValue ? "" : "Baixando…";
+                string speed = UiText.Speed(q.Speed); row.Sub = speed == "—" ? meta : meta + " · " + speed; row.Actions = new[] { "cancel" }; break;
+            case "Converting": row.State = 1; row.Right = "Convertendo…"; row.Sub = meta; row.Actions = new[] { "cancel" }; break;
+            case "Pending": row.Right = "Na fila"; row.Sub = meta; row.Actions = new[] { "remove" }; break;
+            case "Paused": row.Right = "Pausado"; row.Sub = meta; row.Actions = new[] { "remove" }; break;
+            case "Failed":
+                row.State = 2; row.Right = "Falhou"; row.Sub = String.IsNullOrEmpty(q.Error) ? "Erro desconhecido" : Trim(Safety.Redact(q.Error), 110); row.Actions = new[] { "retry", "remove" }; break;
+            case "Blocked": row.State = 2; row.Right = "Fonte em pausa"; row.Sub = "Aguarde antes de tentar de novo"; row.Actions = new[] { "retry", "remove" }; break;
+            case "Cancelled": row.Right = "Cancelado"; row.Sub = meta; row.Actions = new[] { "retry", "remove" }; break;
+            default:
+                if (File.Exists(q.OutputFile))
+                {
+                    long size = 0; try { size = new FileInfo(q.OutputFile).Length; } catch { }
+                    row.State = 3; row.Right = q.Updated.ToLocalTime().ToString("HH:mm"); row.Sub = meta + (size > 0 ? " · " + Theme.Size(size) : ""); row.Actions = new[] { "play", "folder", "remove" };
+                }
+                else { row.State = 2; row.Right = "Arquivo movido"; row.Sub = meta; row.Actions = new[] { "retry", "remove" }; }
+                break;
+        }
+        return row;
+    }
+    static string Trim(string text, int max) { return text.Length <= max ? text : text.Substring(0, max - 1) + "…"; }
+    bool JobOpen(CollectionJob job)
+    {
+        return job.Status == "Discovering" || job.Status.StartsWith("Preview") || job.Entries.Any(e => e.Status == "Discovered");
+    }
+    void AddCollectionRows(List<RowItem> rows)
+    {
+        foreach (CollectionJob job in manager.State.Collections.Where(JobOpen))
+        {
+            bool preview = job.Status.StartsWith("Preview") && !TrustedBulkHost(job.Url);
+            var shown = job.Entries.Where(e => e.Status == "Discovered").ToList();
+            var eligible = shown.Where(e => Metadata.Eligible(e, job.Filter)).ToList();
+            bool open = expanded.Contains(job.Id) && !preview;
+            var row = new RowItem { Key = "job:" + job.Id, Kind = "playlist", Tag = job, ThumbUrl = job.Thumb ?? "", Title = String.IsNullOrEmpty(job.Title) ? "Playlist" : job.Title, Expanded = open };
+            if (job.Status == "Discovering") { row.Sub = "Buscando vídeos… " + job.Entries.Count + " encontrados"; row.Actions = new[] { "cancel", "expand" }; }
+            else if (preview) { row.Sub = "Perfil ou coleção · liste os itens para escolher o que baixar"; row.PrimaryText = "Listar itens"; row.Actions = new[] { "remove" }; }
+            else
+            {
+                row.Sub = "Playlist · " + shown.Count + " vídeos · " + eligible.Count + " selecionados" + (job.Status == "Partial" ? " · lista incompleta" : "");
+                if (eligible.Count > 0) row.PrimaryText = "Adicionar " + eligible.Count + " à fila";
+                row.Actions = new[] { "expand", "remove" };
+            }
+            rows.Add(row);
+            if (!open) continue;
+            rows.Add(new RowItem { Key = "all:" + job.Id, Kind = "selectall", Tag = job, HasCheck = true, Checked = shown.Count > 0 && eligible.Count == shown.Count, Title = "Selecionar todos (" + eligible.Count + " de " + shown.Count + ")" });
+            foreach (CollectionEntry entry in shown.Take(3000))
+                rows.Add(new RowItem { Key = "entry:" + job.Id + ":" + entry.Key, Kind = "entry", Tag = new object[] { job, entry }, HasCheck = true, Checked = !entry.Skip, ThumbUrl = entry.Thumb ?? "",
+                    Title = String.IsNullOrEmpty(entry.Title) ? entry.Id : entry.Title, Right = Theme.Duration(entry.Duration), Sub = "" });
+        }
+    }
+    void Section(List<RowItem> rows, string title, IEnumerable<DownloadItem> items)
+    {
+        var all = items.ToList(); if (all.Count == 0) return;
+        rows.Add(new RowItem { Key = "h:" + title, Kind = "header", Title = title });
+        foreach (DownloadItem q in all) rows.Add(ItemRow(q));
+    }
+    List<RowItem> BuildRows()
+    {
+        var rows = new List<RowItem>(); var queue = manager.State.Queue;
+        if (tabs.Selected == 0)
+        {
+            AddCollectionRows(rows);
+            Section(rows, "BAIXANDO", queue.Where(q => q.Status == "Downloading" || q.Status == "Converting"));
+            Section(rows, "AGUARDANDO", queue.Where(q => q.Status == "Pending" || q.Status == "Paused"));
+            Section(rows, "COM PROBLEMA", queue.Where(q => q.Status == "Failed" || q.Status == "Blocked" || q.Status == "Cancelled"));
         }
         else
         {
-            bool added = manager.Add(url,currentResource == null ? "Media" : Safety.Redact(currentResource.Title),currentResource == null ? null : currentResource.Extractor,currentResource == null ? null : currentResource.Id,null);
-            manager.Save(); if(added)txtUrl.Clear();Feedback(added?"Item adicionado. Use Iniciar downloads quando quiser começar.":"Este formato já está na fila ou possui um arquivo concluído existente.",!added);
+            string filter = searchInput.Box.Text.Trim();
+            var done = queue.Where(q => q.Status == "Completed" && (filter.Length == 0 || (q.Title ?? "").IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0)).OrderByDescending(q => q.Updated).ToList();
+            foreach (var group in done.GroupBy(q => q.Updated.ToLocalTime().Date))
+            {
+                rows.Add(new RowItem { Key = "h:" + group.Key.ToString("yyyyMMdd"), Kind = "header", Title = UiText.Day(group.Key) });
+                foreach (DownloadItem q in group) rows.Add(ItemRow(q));
+            }
         }
-        RefreshQueue();
+        return rows;
     }
-    CollectionJob CurrentJob() { return jobs.SelectedIndex >= 0 && jobs.SelectedIndex < manager.State.Collections.Count ? manager.State.Collections[jobs.SelectedIndex] : null; }
-    void RefreshCollections(string id)
+    void RefreshUi()
     {
-        refreshing = true; jobs.Items.Clear(); foreach (var job in manager.State.Collections) jobs.Items.Add((job.Extractor ?? "Fonte") + " • " + job.Title);
-        collectionHost.Visible = jobs.Items.Count > 0;
-        int index = manager.State.Collections.FindIndex(j => j.Id == id); if (jobs.Items.Count > 0) jobs.SelectedIndex = index >= 0 ? index : jobs.Items.Count - 1;
-        refreshing = false; LoadCollection(); FitWindowToContent();
-    }
-    void LoadCollection()
-    {
-        if (refreshing) return; var job = CurrentJob(); if (job == null) return;
-        refreshing = true; filter.SelectedIndex = Math.Max(0, Array.IndexOf(UiText.Filters,job.Filter)); ownFolder.Checked = job.OwnFolder; batch.Value = job.BatchSize;
-        limit.SelectedIndex = job.Limit == 0 ? 3 : job.Limit == 10 ? 0 : job.Limit == 50 ? 1 : job.Limit == 100 ? 2 : 4;
-        if (job.Limit > 0) customLimit.Value = job.Limit; mode.SelectedIndex = (int)job.Mode; premiere.Checked = job.Premiere; premiere.Enabled = mode.SelectedIndex != 2; refreshing = false; RefreshSummary();
-    }
-    void SaveCollection(CollectionJob job)
-    {
-        job.Filter = UiText.Filters[Math.Max(0,filter.SelectedIndex)]; job.OwnFolder = ownFolder.Checked; job.BatchSize = (int)batch.Value;
-        job.Limit = limit.SelectedIndex == 3 ? 0 : limit.SelectedIndex == 4 ? (int)customLimit.Value : Int32.Parse(limit.Text);
-        job.Mode = (MediaMode)mode.SelectedIndex; job.Premiere = premiere.Checked && mode.SelectedIndex != 2; job.Destination = manager.State.Destination; manager.Save();
-    }
-    async Task Discover()
-    {
-        var job = CurrentJob(); if (job == null) return; SaveCollection(job);
-        string extent = job.Limit == 0 ? "TODAS as entradas acessíveis, sem limite numérico" : "até " + job.Limit + " entradas";
-        if (MessageBox.Show(this, "Perfis e coleções podem gerar muitas solicitações. Isso pode causar limites de acesso ou restrições na conta, especialmente se usar cookies.\n\nO yt-dlp tentará descobrir " + extent + ". O limite de entradas não é uma garantia sobre o número de requisições; o comportamento depende do extrator. Os downloads serão enfileirados separadamente em lotes manuais.\n\nRecomendação: comece com 10 entradas, sem cookies quando possível. A espera entre requisições não elimina o risco. Continuar?", "Descoberta de perfis e coleções", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
-        await Guard(delegate { return manager.Discover(job); });
-    }
-    void QueueBatch()
-    {
-        var job = CurrentJob(); if (job == null) return; SaveCollection(job);
-        int count = manager.QueueBatch(job); Feedback(count>0?count+" item(ns) adicionado(s). Use Iniciar downloads na seção Sua fila.":"Nenhum novo item elegível. Revise o filtro e os resultados da busca.",count==0); RefreshQueue();
-    }
-    void ReleaseHolds()
-    {
-        var timed = manager.State.Holds.Where(h => h.Until.HasValue && h.Until.Value > DateTime.UtcNow).ToList();
-        if (timed.Count > 0) { MessageBox.Show(this,"A fonte pediu uma espera até "+timed.Max(h=>h.Until.Value).ToLocalTime()+". Aguarde o prazo antes de tentar novamente.","Fonte em pausa",MessageBoxButtons.OK,MessageBoxIcon.Information); return; }
-        if (manager.State.Holds.Count == 0) { Log("No source holds."); return; }
-        if (MessageBox.Show(this,"Você já resolveu a restrição de acesso ou aguardou o limite do serviço? Liberar uma fonte não resolve a causa e repetir tentativas pode agravar a restrição.\n\nLiberar as fontes em pausa?", "Revisar fontes em pausa",MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-        { manager.ReleaseHolds(); Feedback("Fontes liberadas. Selecione os itens bloqueados, use Tentar novamente e inicie a fila.",false); }
-    }
-    bool ConfirmQueueAction(string action, string explanation)
-    {
-        int count=TargetItems().Count(q=>action!="Cancelar"||new[]{"Pending","Paused","Downloading","Converting"}.Contains(q.Status));if(count==0)return false;
-        return MessageBox.Show(this, explanation + "\n\n" + action + " " + count + " item(ns)?", action + " tarefas", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
-    }
-    void Selected(Action<DownloadItem> action)
-    {
-        var items = TargetItems();
-        foreach (var item in items) action(item); RefreshQueue();
-    }
-    bool InScope(DownloadItem item,string scope)
-    {
-        switch(scope){case "active":return item.Status=="Downloading"||item.Status=="Converting";case "pending":return item.Status=="Pending";case "done":return item.Status=="Completed";case "failed":return item.Status=="Failed"||item.Status=="Blocked";case "stopped":return item.Status=="Paused"||item.Status=="Cancelled";default:return true;}
-    }
-    void OpenOutput(bool folder)
-    {
-        var targets=TargetItems();if(targets.Count!=1)return;var item=targets[0];
-        if(folder){string directory=File.Exists(item.OutputFile)?Path.GetDirectoryName(item.OutputFile):item.Destination;System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(directory){UseShellExecute=true});return;}
-        if(item.Status!="Completed"||!File.Exists(item.OutputFile))return;
-        if(!new[]{".mp4",".mkv",".webm",".mov",".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".avi",".mpeg",".mpg",".m4v",".ts"}.Contains(Path.GetExtension(item.OutputFile).ToLowerInvariant())){Feedback("Este tipo de arquivo não será aberto pelo aplicativo. Use Abrir pasta para conferir.",true);return;}
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.OutputFile){UseShellExecute=true});
-    }
-    void PaintQueueProgress(object sender,DataGridViewCellPaintingEventArgs e)
-    {
-        if(e.RowIndex<0||e.ColumnIndex!=5)return;var item=queue.Rows[e.RowIndex].Tag as DownloadItem;if(item==null||!item.Percent.HasValue)return;
-        e.PaintBackground(e.ClipBounds,true);var track=new Rectangle(e.CellBounds.X+7,e.CellBounds.Y+8,Math.Max(1,e.CellBounds.Width-14),e.CellBounds.Height-16);
-        using(var back=new SolidBrush(Secondary))e.Graphics.FillRectangle(back,track);
-        var fill=track;fill.Width=(int)(track.Width*Math.Max(0,Math.Min(100,item.Percent.Value))/100);
-        if(fill.Width>0)using(var brush=new SolidBrush(item.Status=="Completed"?Color.FromArgb(42,111,86):Color.FromArgb(151,39,128)))e.Graphics.FillRectangle(brush,fill);
-        TextRenderer.DrawText(e.Graphics,item.Percent.Value.ToString("0.0")+"%",queue.Font,track,Ink,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);e.Handled=true;
-    }
-    void RefreshQueue()
-    {
-        if (closing || resizing || queue == null) return;
-        var selected = new HashSet<string>(queue.SelectedRows.Cast<DataGridViewRow>().Where(r => r.Tag != null).Select(r => ((DownloadItem)r.Tag).Id));
-        int scroll = queue.FirstDisplayedScrollingRowIndex;
-        // Update cells in place: do not discard row selection or scrolling during progress updates.
-        checkedItems.RemoveWhere(id=>!manager.State.Queue.Any(q=>q.Id==id));refreshingChecks=true;
-        var visibleItems=manager.State.Queue.Where(q=>InScope(q,queueScope)).ToList();
-        string[] scopes={"all","active","pending","done","failed","stopped"};string[] labels={"Todos","Em andamento","Aguardando","Concluídos","Com erro","Pausados/cancelados"};
-        for(int i=0;i<scopes.Length;i++){scopeButtons[scopes[i]].Text=labels[i]+" ("+manager.State.Queue.Count(q=>InScope(q,scopes[i]))+")";scopeButtons[scopes[i]].BackColor=queueScope==scopes[i]?Color.FromArgb(83,43,88):Secondary;}
-        bool rebuild = queue.Rows.Count != visibleItems.Count;
-        if (!rebuild) for (int i=0;i<queue.Rows.Count;i++) if (queue.Rows[i].Tag != visibleItems[i]) { rebuild=true; break; }
-        if (rebuild) { queue.Rows.Clear(); foreach (var item in visibleItems) { int row = queue.Rows.Add(); queue.Rows[row].Tag = item; } }
-        foreach (DataGridViewRow row in queue.Rows)
+        if (closing || list == null || resizing || refreshing) return;
+        refreshing = true;
+        try
         {
-            var item = (DownloadItem)row.Tag;
-            object[] values={checkedItems.Contains(item.Id),String.IsNullOrEmpty(item.Title)?String.IsNullOrEmpty(item.MediaId)?"Sem título":item.MediaId:item.Title, item.Extractor ?? Safety.Source(item.Url), UiText.Mode(item.Mode,item.Premiere), (item.Status=="Completed"&&!File.Exists(item.OutputFile)?"Concluído · arquivo ausente":UiText.Status(item.Status)), item.Percent.HasValue ? item.Percent.Value.ToString("0.0") + "%" : item.Status=="Downloading"?"Sem total":item.Status=="Converting"?"Processando":"—", UiText.Speed(item.Speed), item.Error};
-            for(int column=0;column<values.Length;column++)if(!Object.Equals(row.Cells[column].Value,values[column]))row.Cells[column].Value=values[column];
-            Color background=item.Status=="Downloading"||item.Status=="Converting"?Color.FromArgb(40,32,49):Surface;
-            if(row.DefaultCellStyle.BackColor!=background)row.DefaultCellStyle.BackColor=background;
-            Color statusColor=item.Status=="Downloading"||item.Status=="Converting"?Color.FromArgb(244,143,224):item.Status=="Completed"?Color.FromArgb(115,217,173):item.Status=="Failed"||item.Status=="Blocked"?Color.FromArgb(249,180,135):Ink;
-            if(row.Cells[4].Style.ForeColor!=statusColor)row.Cells[4].Style.ForeColor=statusColor;
-            if (rebuild) row.Selected = selected.Contains(item.Id);
+            var queue = manager.State.Queue;
+            int open = queue.Count(q => q.Status != "Completed"), done = queue.Count(q => q.Status == "Completed");
+            tabs.SetTabs("Fila · " + open, "Concluídos · " + done);
+            list.EmptySub = tabs.Selected == 0 ? "Cole um link acima e pressione Enter." : "Os downloads concluídos ficam aqui por " + manager.State.KeepCompletedDays + " dias.";
+            list.SetRows(BuildRows());
+            bool canRun = queue.Any(q => (q.Status == "Pending" || q.Status == "Paused") && !manager.Held(q.Url) && !manager.Held(q.OriginalUrl));
+            startButton.Visible = tabs.Selected == 0 && (open > 0 || manager.Running);
+            startButton.Text = manager.Running ? "Pausar" : queue.Any(q => q.Status == "Paused") ? "Retomar" : "Baixar tudo";
+            startButton.Icon = manager.Running ? Glyph.Pause : Glyph.Download; startButton.Kind = manager.Running ? BtnKind.Secondary : BtnKind.Primary;
+            startButton.Enabled = manager.Running || (canRun && !manager.Busy && !manager.Updating);
+            bool completedTab = tabs.Selected == 1;
+            clearButton.Visible = completedTab && done > 0; searchInput.Visible = completedTab && done > 0;
+            PlaceTabRow();
+            string url = urlInput.Box.Text.Trim();
+            urlInput.Button.Enabled = Safety.ValidUrl(url) && unsupportedUrl != url && !manager.Updating;
+            if (holdsButton != null) { holdsButton.Visible = manager.State.Holds.Count > 0; holdsButton.Text = "Fontes em pausa (" + manager.State.Holds.Count + ")"; }
         }
-        refreshingChecks=false;
-        if (rebuild && scroll >= 0 && scroll < queue.Rows.Count) queue.FirstDisplayedScrollingRowIndex = scroll;
-        RefreshSummary();
+        finally { refreshing = false; }
     }
-    void RefreshSummary()
+    async Task HandleRowAction(RowItem row, string action)
     {
-        if(resizing||closing||start==null||queue==null||queueSummary==null)return;
-        bool canRun=manager.State.Queue.Any(q=>(q.Status=="Pending"||q.Status=="Paused")&&!manager.Held(q.Url)&&!manager.Held(q.OriginalUrl));
-        start.Enabled=canRun&&!manager.Running&&!manager.Busy&&!manager.Updating;
-        start.Text=manager.Running?"Baixando…":manager.State.Queue.Any(q=>q.Status=="Paused")?"Retomar fila":"Iniciar downloads";
-        pause.Enabled=manager.Running;pause.BackColor=manager.Running?Accent:Secondary;engine.Enabled=!manager.Running&&!manager.Busy&&!manager.Discovering&&!manager.Updating&&manager.Analyzing==0;
-        queueSummary.Text=manager.State.Queue.Count+" na fila  ·  "+manager.State.Queue.Count(q=>q.Status=="Completed")+" concluídos"+(checkedItems.Count>0?"  ·  "+checkedItems.Count+" marcados":"");
-        bool empty=manager.State.Queue.Count==0;emptyQueue.Visible=queue.Rows.Count==0;
-        emptyQueue.Text=empty?"Nenhum download na fila.\nCole um link acima e escolha Adicionar à fila.":"Nenhum item nesta categoria. Escolha outro filtro para ver os downloads.";
-        start.Visible=!empty;pause.Visible=!empty;queueSummary.Visible=!empty;
-        if(queueActions!=null)queueActions.Visible=!empty;
-        var queueMinimum=new Size(0,empty?48:145);if(queue.MinimumSize!=queueMinimum)queue.MinimumSize=queueMinimum;queueFilters.Visible=!empty;
-        if(contentLayout!=null&&contentLayout.RowStyles[5].Height!=(empty?130:330))contentLayout.RowStyles[5].Height=empty?130:330;
-        string url=txtUrl.Text.Trim();bool unsupported=unsupportedUrl==url&&url!="";
-        btnDownload.Enabled=Safety.ValidUrl(url)&&!unsupported&&analysis==null&&!manager.Updating;
-        btnDownload.Text=unsupported?"Link não suportado":analysis!=null?"Analisando…":resourceMode.SelectedIndex==2||(resourceMode.SelectedIndex==0&&currentResource!=null&&currentResource.IsCollection)?"Abrir coleção":"Adicionar à fila";
-        var selected=TargetItems();
-        if(retrySelection!=null)
+        var item = row.Tag as DownloadItem;
+        if (item != null)
         {
-            retrySelection.Enabled=selected.Any(q=>q.Status=="Failed"||q.Status=="Cancelled"||q.Status=="Paused"||q.Status=="Blocked"||(q.Status=="Completed"&&!File.Exists(q.OutputFile)));
-            cancelSelection.Enabled=selected.Any(q=>new[]{"Pending","Paused","Downloading","Converting"}.Contains(q.Status));removeSelection.Enabled=selected.Count>0;detailsButton.Enabled=selected.Count==1;
-            var single=selected.Count==1?selected[0]:null;
-            if(openFileButton!=null){openFileButton.Enabled=single!=null&&single.Status=="Completed"&&File.Exists(single.OutputFile);openFolderButton.Enabled=single!=null&&Directory.Exists(single.Destination);}
-            clearCompleted.Enabled=manager.State.Queue.Any(q=>q.Status=="Completed");releaseHolds.Visible=manager.State.Holds.Count>0;releaseHolds.Text="Revisar fontes em pausa ("+manager.State.Holds.Count+")";
+            switch (action)
+            {
+                case "cancel": manager.Cancel(item); break;
+                case "remove": manager.Remove(item); break;
+                case "retry": manager.Retry(item); if (manager.State.AutoStart) StartQueue(); break;
+                case "play": OpenOutput(item, false); break;
+                case "folder": OpenOutput(item, true); break;
+            }
+            RefreshUi(); return;
         }
-        var job=CurrentJob();
-        if(discoverButton!=null)
+        var job = row.Tag as CollectionJob;
+        if (job != null)
         {
-            discoverButton.Enabled=job!=null&&!manager.Discovering&&!manager.Updating&&!manager.Held(job.Url);stopDiscovery.Enabled=manager.Discovering;
-            nextBatch.Enabled=job!=null&&job.Entries.Any(e=>e.Status=="Discovered"&&Metadata.Eligible(e,job.Filter))&&!manager.State.Queue.Any(q=>q.CollectionId==job.Id&&new[]{"Pending","Paused","Downloading","Converting"}.Contains(q.Status));
+            switch (action)
+            {
+                case "expand": if (!expanded.Add(job.Id)) expanded.Remove(job.Id); break;
+                case "remove": expanded.Remove(job.Id); manager.RemoveCollection(job); break;
+                case "cancel": manager.StopDiscovery(); break;
+                case "primary":
+                    if (job.Status.StartsWith("Preview") && !TrustedBulkHost(job.Url)) { expanded.Add(job.Id); await DiscoverJob(job, true); }
+                    else QueueCollection(job);
+                    break;
+                case "check":
+                    var open = job.Entries.Where(e => e.Status == "Discovered").ToList();
+                    bool all = open.All(e => !e.Skip && Metadata.Eligible(e, job.Filter));
+                    foreach (var entry in open) entry.Skip = all; manager.Save(); break;
+            }
+            RefreshUi(); return;
         }
-        if(job!=null)
-        {
-            int available=job.Entries.Count(e=>e.Status=="Discovered"&&Metadata.Eligible(e,job.Filter));
-            collectionSummary.Text=UiText.Collection(job)+"\nEncontrados: "+job.Entries.Count+"  ·  Novos elegíveis: "+available+"  ·  Concluídos: "+job.Entries.Count(e=>e.Status=="Completed")+"  ·  Falhas: "+job.Entries.Count(e=>e.Status=="Failed"||e.Status=="Blocked");
-        }
+        var pair = row.Tag as object[];
+        if (pair != null && action == "check") { var entry = (CollectionEntry)pair[1]; entry.Skip = !entry.Skip; manager.Save(); RefreshUi(); }
     }
-    void FitWindowToContent()
+    void QueueCollection(CollectionJob job)
     {
-        if(userSized||WindowState!=FormWindowState.Normal||contentLayout==null)return;
-        PerformLayout();contentLayout.PerformLayout();
-        Rectangle area=Screen.FromControl(this).WorkingArea;
-        int chrome=Height-ClientSize.Height;
-        int desired=Math.Min(Math.Max(560,contentLayout.Height+2),Math.Max(560,area.Height-chrome-42));
-        ClientSize=new Size(Math.Min(ClientSize.Width,Math.Max(800,area.Width-70)),desired);
+        var s = manager.State;
+        job.Mode = s.Mode; job.Premiere = s.Premiere; job.Destination = s.Destination; job.BatchSize = 100000;
+        int count;
+        try { count = manager.QueueBatch(job); }
+        catch (InvalidOperationException) { Feedback("Esta playlist ainda tem vídeos em andamento. Aguarde terminarem para adicionar mais.", true); return; }
+        if (count > 0)
+        {
+            Feedback(count + (count == 1 ? " vídeo adicionado à fila." : " vídeos adicionados à fila."), false);
+            // Videos left unchecked were a decision: the playlist leaves the list once nothing selected remains.
+            if (!job.Entries.Any(e => e.Status == "Discovered" && !e.Skip)) { expanded.Remove(job.Id); manager.RemoveCollection(job); }
+            if (s.AutoStart) StartQueue();
+        }
+        else Feedback("Nenhum vídeo marcado para adicionar.", true);
     }
-    void Feedback(string text,bool error)
-    {resource.Text=text;resource.ForeColor=error?Color.FromArgb(249,180,135):Color.FromArgb(153,219,186);Log(text);}
+    void OpenOutput(DownloadItem item, bool folder)
+    {
+        string file = item.OutputFile;
+        if (folder)
+        {
+            if (!String.IsNullOrEmpty(file) && File.Exists(file)) Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + file + "\"") { UseShellExecute = true });
+            else if (Directory.Exists(item.Destination)) Process.Start(new ProcessStartInfo(item.Destination) { UseShellExecute = true });
+            return;
+        }
+        if (String.IsNullOrEmpty(file) || !File.Exists(file)) return;
+        string[] safe = { ".mp4", ".mkv", ".webm", ".mov", ".mp3", ".m4a", ".aac", ".wav", ".flac", ".ogg", ".opus", ".avi", ".mpeg", ".mpg", ".m4v", ".ts", ".gif", ".jpg" };
+        if (!safe.Contains(Path.GetExtension(file).ToLowerInvariant())) { Feedback("Este tipo de arquivo não é aberto pelo aplicativo. Use Mostrar na pasta.", true); return; }
+        Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
+    }
+
+    // ---------- feedback, log, helpers ----------
+    void Feedback(string text, bool error) { preview.Message(text, error); Log(text); }
+    void Log(string text)
+    {
+        if (IsDisposed || shuttingDown) return;
+        if (InvokeRequired) { try { BeginInvoke(new Action<string>(Log), text); } catch { } return; }
+        if (logText.Length > 100000) logText.Clear();
+        logText.Append(Safety.Redact(UiText.Message(text))).Append(Environment.NewLine);
+    }
+    async Task Guard(Func<Task> action)
+    {
+        try { await action(); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Feedback(ex is UnsupportedResourceException ? UiText.Unsupported : "Não foi possível concluir: " + Safety.Redact(ex.Message), true); }
+    }
+    void FillClipboard()
+    {
+        try { if (urlInput.Box.Text.Trim().Length == 0 && Clipboard.ContainsText() && Safety.ValidUrl(Clipboard.GetText().Trim())) urlInput.Box.Text = Clipboard.GetText().Trim(); } catch { }
+    }
+    void OpenHelp() { using (var help = new HelpCenterForm()) help.ShowDialog(this); }
     async void HandleClosing(object sender, FormClosingEventArgs e)
     {
         if (closing) return;
         e.Cancel = true; if (shuttingDown) return; shuttingDown = true;
-        // Exit this event before issuing a second Close, including when the queue is idle.
         await Task.Yield();
         try
         {
@@ -425,20 +636,153 @@ partial class BaixakiForm : Form
         }
         catch (Exception ex) { shuttingDown = false; refresh.Start(); Log("Não foi possível salvar a fila: " + Safety.Redact(ex.Message)); }
     }
+
+    // ---------- settings drawer ----------
+    void ToggleSettings()
+    {
+        settingsPanel.Visible = !settingsPanel.Visible;
+        if (settingsPanel.Visible) { foreach (var refresher in settingsRefresh) refresher(); settingsPanel.BringToFront(); }
+        gearButton.Active = settingsPanel.Visible;
+    }
+    void BuildSettings()
+    {
+        int panelWidth = Theme.S(410), margin = Theme.S(22);
+        settingsPanel = new BufferedPanel { Width = panelWidth, BackColor = Theme.Panel, Visible = false, AutoScroll = true };
+        settingsPanel.HandleCreated += delegate { DarkScroll.Apply(settingsPanel); };
+        Controls.Add(settingsPanel); settingsPanel.BringToFront();
+        Action place = delegate { settingsPanel.SetBounds(ClientSize.Width - settingsPanel.Width, 0, settingsPanel.Width, ClientSize.Height); };
+        Resize += delegate { place(); }; place();
+        settingsPanel.Paint += delegate(object sender, PaintEventArgs e) { using (var pen = new Pen(Theme.Line)) e.Graphics.DrawLine(pen, 0, 0, 0, settingsPanel.Height); };
+        int y = Theme.S(18);
+        var title = new Label { Text = "Configurações", Font = Theme.Font(12.5F, true), ForeColor = Theme.Ink, AutoSize = true, Location = new Point(margin, y), BackColor = Theme.Panel };
+        var close = new FlatButton { Kind = BtnKind.Ghost, Icon = Glyph.Close, Width = Theme.S(38), Height = Theme.S(36), AutoFit = false, Location = new Point(panelWidth - margin - Theme.S(38), y - Theme.S(6)) };
+        close.Click += delegate { ToggleSettings(); };
+        settingsPanel.Controls.Add(title); settingsPanel.Controls.Add(close); y += Theme.S(50);
+        Func<string, int> section = delegate(string name)
+        {
+            settingsPanel.Controls.Add(new Label { Text = name, Font = Theme.Font(8.5F, true), ForeColor = Theme.Muted, AutoSize = true, Location = new Point(margin, y + Theme.S(4)), BackColor = Theme.Panel }); y += Theme.S(32); return y;
+        };
+        Func<string, string, Control, Label> row = delegate(string name, string tip, Control right)
+        {
+            var label = new Label { Text = name, ForeColor = Theme.Ink, AutoSize = true, Location = new Point(margin, y + Theme.S(7)), BackColor = Theme.Panel };
+            settingsPanel.Controls.Add(label); right.Location = new Point(panelWidth - margin - right.Width - (settingsPanel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0), y + (Theme.S(34) - right.Height) / 2); settingsPanel.Controls.Add(right);
+            if (tip.Length > 0) { tips.SetToolTip(label, tip); tips.SetToolTip(right, tip); }
+            y += Theme.S(44); return label;
+        };
+        var s = manager.State;
+
+        section("DOWNLOADS");
+        var folder = new FlatButton { Kind = BtnKind.Secondary, Height = Theme.S(34), Text = "Alterar" }; folder.Click += delegate { ChooseFolder(); };
+        row("Pasta padrão", "A pasta atual aparece na etiqueta da tela principal.", folder);
+        var autoStart = new ToggleSwitch { Checked = s.AutoStart }; autoStart.CheckedChanged += delegate { s.AutoStart = autoStart.Checked; Persist(); };
+        row("Iniciar ao adicionar", "Começa a baixar assim que você adiciona um item.", autoStart);
+        var duplicates = new ToggleSwitch { Checked = s.Duplicates }; duplicates.CheckedChanged += delegate { s.Duplicates = duplicates.Checked; Persist(); };
+        row("Pular já baixados", "Evita baixar de novo um vídeo que já existe na pasta, no mesmo formato.", duplicates);
+        var ownFolder = new ToggleSwitch { Checked = s.OwnFolder }; ownFolder.CheckedChanged += delegate { s.OwnFolder = ownFolder.Checked; Persist(); };
+        row("Subpasta por playlist", "Guarda os vídeos de cada playlist em uma pasta separada.", ownFolder);
+
+        section("RITMO E LIMITES");
+        var pace = new FlatButton { Kind = BtnKind.Chip, Dropdown = true, Height = Theme.S(34) };
+        Action showPace = delegate { pace.Text = s.PaceAuto ? "Automático" : s.PaceSeconds + " s"; };
+        pace.Click += delegate
+        {
+            var menu = DarkMenu.Create();
+            DarkMenu.Item(menu, "Automático", "1 s até 10 vídeos, 5 s acima", s.PaceAuto, delegate { s.PaceAuto = true; Persist(); showPace(); });
+            foreach (int seconds in new[] { 1, 3, 5, 10, 30 }) { int value = seconds; DarkMenu.Item(menu, value + " s", "", !s.PaceAuto && s.PaceSeconds == value, delegate { s.PaceAuto = false; s.PaceSeconds = value; Persist(); showPace(); }); }
+            menu.Show(pace, new Point(0, pace.Height + 4));
+        };
+        showPace(); row("Espera entre itens", "Espera entre downloads. No automático: 1 s para menos de 10 vídeos e 5 s a partir disso. Reduz o risco de bloqueio.", pace);
+        var limit = new FlatButton { Kind = BtnKind.Chip, Dropdown = true, Height = Theme.S(34) };
+        Action showLimit = delegate { limit.Text = s.DefaultLimit == 0 ? "Todos" : s.DefaultLimit.ToString(); };
+        limit.Click += delegate
+        {
+            var menu = DarkMenu.Create();
+            foreach (int value in new[] { 0, 10, 50 }) { int v = value; DarkMenu.Item(menu, v == 0 ? "Todos" : v.ToString(), "", s.DefaultLimit == v, delegate { s.DefaultLimit = v; Persist(); showLimit(); }); }
+            menu.Show(limit, new Point(0, limit.Height + 4));
+        };
+        showLimit(); row("Itens por playlist", "Quantos vídeos listar ao abrir uma playlist ou coleção.", limit);
+
+        section("LOGIN (OPCIONAL)");
+        var cookies = new FlatButton { Kind = BtnKind.Chip, Dropdown = true, Height = Theme.S(34), Text = "Não usar" };
+        cookies.Click += delegate
+        {
+            var menu = DarkMenu.Create();
+            DarkMenu.Item(menu, "Não usar", "", manager.Browser == "", delegate { manager.Browser = ""; cookies.Text = "Não usar"; });
+            foreach (string browser in new[] { "chrome", "edge", "firefox", "brave", "opera", "vivaldi", "chromium" })
+            {
+                string name = browser;
+                DarkMenu.Item(menu, name, "", manager.Browser == name, delegate
+                {
+                    if (MessageBox.Show(this, "O yt-dlp tentará ler cookies do navegador e usá-los nas próximas consultas. Isso pode associar o acesso à sua conta e causar restrições. Cookies não corrigem suporte ausente ou quebrado.\n\nA escolha vale somente nesta sessão; valores não são salvos pelo Baixaki. Usar esse navegador?", "Autenticação opcional", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+                    manager.Browser = name; cookies.Text = name;
+                });
+            }
+            menu.Show(cookies, new Point(0, cookies.Height + 4));
+        };
+        row("Cookies do navegador", "Só para conteúdo que exige login. Vale apenas nesta sessão e pode associar as consultas à sua conta.", cookies);
+
+        section("MOTOR E ATUALIZAÇÕES");
+        var engineButton = new FlatButton { Kind = BtnKind.Secondary, Height = Theme.S(34), Text = "Verificar" };
+        engineButton.Click += async delegate { await Guard(async delegate { Feedback("Verificando o yt-dlp…", false); await manager.UpdateEngine(); manager.State.LastEngineCheck = DateTime.UtcNow; Persist(); RefreshEngineVersion(); Feedback("yt-dlp verificado.", false); }); };
+        engineVersionLabel = row("yt-dlp", "Atualiza sozinho uma vez por dia.", engineButton);
+        var appButton = new FlatButton { Kind = BtnKind.Secondary, Height = Theme.S(34), Text = "Verificar" }; appButton.Click += delegate { CheckForUpdate(true); };
+        row("Baixaki " + AppVersion, "Procura uma versão nova no GitHub.", appButton);
+
+        section("DIAGNÓSTICO");
+        int bx = margin;
+        foreach (var entry in new[] { new KeyValuePair<string, Action>("Registro", delegate { using (var form = new LogForm(logText.ToString())) form.ShowDialog(this); }),
+            new KeyValuePair<string, Action>("Dados do app", delegate { try { Process.Start(new ProcessStartInfo(manager.Store.Root) { UseShellExecute = true }); } catch { } }),
+            new KeyValuePair<string, Action>("Ajuda", OpenHelp) })
+        {
+            var button = new FlatButton { Kind = BtnKind.Secondary, Height = Theme.S(34), Text = entry.Key, Location = new Point(bx, y) }; var action = entry.Value;
+            button.Click += delegate { action(); }; settingsPanel.Controls.Add(button); bx += button.Width + Theme.S(8);
+        }
+        y += Theme.S(46);
+        holdsButton = new FlatButton { Kind = BtnKind.Secondary, Height = Theme.S(34), Text = "Fontes em pausa", Location = new Point(margin, y), Visible = false };
+        holdsButton.Click += delegate { ReleaseHolds(); };
+        settingsPanel.Controls.Add(holdsButton);
+        settingsRefresh.Add(delegate { RefreshEngineVersion(); });
+    }
+    async void RefreshEngineVersion()
+    {
+        if (engineVersionLabel == null) return;
+        string version = "";
+        try { await manager.Engine.Run("yt-dlp", new List<string> { "--version" }, manager.Engine.BaseDirectory, delegate(string line) { if (line.Trim().Length > 0) version = line.Trim(); }, delegate { }, CancellationToken.None, 20); }
+        catch { }
+        if (!IsDisposed) engineVersionLabel.Text = version.Length > 0 ? "yt-dlp " + version : "yt-dlp (não encontrado)";
+    }
+    // Quiet once-a-day engine update, only when nothing is running.
+    async Task AutoUpdateEngine()
+    {
+        var last = manager.State.LastEngineCheck;
+        if (last.HasValue && last.Value > DateTime.UtcNow.AddHours(-24)) return;
+        if (manager.Running || manager.Busy || manager.Discovering || manager.Updating || manager.Analyzing > 0 || shuttingDown) return;
+        try { await manager.UpdateEngine(); manager.State.LastEngineCheck = DateTime.UtcNow; manager.Save(); RefreshEngineVersion(); } catch (Exception ex) { Log("Atualização automática do yt-dlp indisponível: " + Safety.Redact(ex.Message)); }
+    }
+    void ReleaseHolds()
+    {
+        var timed = manager.State.Holds.Where(h => h.Until.HasValue && h.Until.Value > DateTime.UtcNow).ToList();
+        if (timed.Count > 0) { MessageBox.Show(this, "A fonte pediu uma espera até " + timed.Max(h => h.Until.Value).ToLocalTime() + ". Aguarde o prazo antes de tentar novamente.", "Fonte em pausa", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+        if (manager.State.Holds.Count == 0) return;
+        if (MessageBox.Show(this, "Você já resolveu a restrição de acesso ou aguardou o limite do serviço? Liberar uma fonte não resolve a causa e repetir tentativas pode agravar a restrição.\n\nLiberar as fontes em pausa?", "Fontes em pausa", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+        { manager.ReleaseHolds(); Feedback("Fontes liberadas. Use Tentar de novo nos itens bloqueados.", false); RefreshUi(); }
+    }
+
+    // ---------- hooks used by the automated UI checks ----------
+    internal DownloadManager Manager { get { return manager; } }
+    internal RowList ListView { get { return list; } }
+    internal PillInput UrlInput { get { return urlInput; } }
+    internal TabStrip Tabs { get { return tabs; } }
+    internal PreviewStrip Preview { get { return preview; } }
+    internal Control SettingsPanelControl { get { return settingsPanel; } }
+    internal FlatButton StartButton { get { return startButton; } }
+    internal FlatButton FormatChip { get { return formatChip; } }
+    internal FlatButton GearButton { get { return gearButton; } }
+    internal Task AnalyzeNow() { return StartAnalysis(urlInput.Box.Text.Trim()); }
+    internal Task AddNow() { return AddUrl(); }
+    internal void SetFormatForTest(MediaMode mode, bool premiere) { manager.State.Mode = mode; manager.State.Premiere = premiere; UpdateChips(); }
+    internal void ActOnRow(RowItem row, string action) { HandleRowAction(row, action).Wait(); }
+    internal void RefreshNow() { RefreshUi(); }
+    internal void ToggleSettingsForTest() { ToggleSettings(); }
+    internal string LogText { get { return logText.ToString(); } }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

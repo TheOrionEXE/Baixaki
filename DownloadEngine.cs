@@ -109,7 +109,8 @@ public class EngineRunner
 }
 public class ResourceInfo
 {
-    public string Url, Title, Extractor, Id, Type;
+    public string Url, Title, Extractor, Id, Type, Thumb, Channel;
+    public int Duration;
     public bool IsCollection;
     public List<CollectionEntry> Preview = new List<CollectionEntry>();
 }
@@ -118,18 +119,38 @@ public static class Metadata
     public static Dictionary<string, object> Parse(string json) { return StateStore.Serializer().Deserialize<Dictionary<string, object>>(json); }
     public static string Text(Dictionary<string, object> data, string name)
     { object value; return data.TryGetValue(name, out value) && value != null ? Convert.ToString(value, CultureInfo.InvariantCulture) : ""; }
+    // Picks a safe https thumbnail: the "thumbnail" field, otherwise the last (usually largest) item of "thumbnails".
+    public static string Thumbnail(Dictionary<string, object> data)
+    {
+        string direct = Text(data, "thumbnail");
+        if (Safety.ValidUrl(direct)) return direct;
+        object list; string found = "";
+        if (data.TryGetValue("thumbnails", out list) && list is IEnumerable && !(list is string))
+            foreach (object value in (IEnumerable)list)
+            {
+                var thumb = value as Dictionary<string, object>;
+                if (thumb != null && Safety.ValidUrl(Text(thumb, "url"))) found = Text(thumb, "url");
+            }
+        return found;
+    }
+    public static int Seconds(Dictionary<string, object> data, string name)
+    {
+        double value;
+        return Double.TryParse(Text(data, name), NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value > 0 && value < 8640000 ? (int)Math.Round(value) : 0;
+    }
     public static ResourceInfo Resource(Dictionary<string, object> data, string url)
     {
         string type = Text(data, "_type");
         var info = new ResourceInfo { Url = url, Title = Text(data, "title"), Extractor = Text(data, "extractor_key"), Id = Text(data, "id"), Type = type,
-            IsCollection = type == "playlist" || type == "multi_video" || data.ContainsKey("entries") };
+            IsCollection = type == "playlist" || type == "multi_video" || data.ContainsKey("entries"),
+            Thumb = Thumbnail(data), Duration = Seconds(data, "duration"), Channel = Text(data, "channel") != "" ? Text(data, "channel") : Text(data, "uploader") };
         object entries;
         if (data.TryGetValue("entries",out entries) && entries is IEnumerable)
         {
             foreach (object value in (IEnumerable)entries)
             {
                 var entry = value as Dictionary<string,object>;
-                if (entry != null) { info.Preview.Add(Entry(entry)); break; }
+                if (entry != null) { info.Preview.Add(Entry(entry)); if (info.Thumb == "") info.Thumb = info.Preview[0].Thumb; break; }
             }
         }
         return info;
@@ -146,11 +167,13 @@ public static class Metadata
         string extractor = Text(data, "extractor_key");
         if (extractor.Length == 0) extractor = Text(data, "ie_key");
         return new CollectionEntry { Id = Text(data, "id"), Title = Safety.Redact(Text(data, "title")), Extractor = extractor,
-            Url = Safety.ValidUrl(url) ? url : "", Kind = kind, HasAudio = a != "" && a != "none", Status = (type == "playlist" || type == "multi_video") ? "Nested collection" : "Discovered" };
+            Url = Safety.ValidUrl(url) ? url : "", Kind = kind, HasAudio = a != "" && a != "none", Status = (type == "playlist" || type == "multi_video") ? "Nested collection" : "Discovered",
+            Thumb = Thumbnail(data), Duration = Seconds(data, "duration"), Channel = Text(data, "channel") != "" ? Text(data, "channel") : Text(data, "uploader") };
     }
     public static bool Eligible(CollectionEntry entry, string filter)
     {
         if (filter == "Other media: unsupported") return false;
+        if (entry.Skip) return false;
         if (entry.Status == "Nested collection" || String.IsNullOrEmpty(entry.Url) || entry.Kind == "Other") return false;
         if (filter == "Videos only (known metadata)") return entry.Kind == "Video";
         if (filter == "Audio-compatible only (known metadata)") return entry.HasAudio;
@@ -195,20 +218,46 @@ public class DownloadManager
         if (discovery != null && Safety.Source(discoveryUrl) == source) discovery.Cancel();
         if (active != null && State.Queue.Any(q => q.Id == ActiveId && (Safety.Source(q.Url) == source || Safety.Source(q.OriginalUrl) == source))) active.Cancel();
     }
-    List<string> Common()
+    // Seconds to wait between requests/items. Automatic mode: 1 s for small queues (fewer than 10 open items), 5 s for larger ones.
+    public int Pace
     {
-        var args = new List<string> { "--ignore-config", "--encoding", "utf-8", "--socket-timeout", "20", "--retries", "0", "--fragment-retries", "0", "--extractor-retries", "0", "--sleep-requests", State.PaceSeconds.ToString(CultureInfo.InvariantCulture), "--no-colors" };
+        get
+        {
+            if (!State.PaceAuto) return Math.Max(0, State.PaceSeconds);
+            int open = State.Queue.Count(q => q.Status == "Pending" || q.Status == "Downloading" || q.Status == "Converting" || q.Status == "Paused");
+            return open < 10 ? 1 : 5;
+        }
+    }
+    // Analysis is a single metadata lookup, so it never waits between requests; only downloads and discovery are paced.
+    List<string> Common(bool paced = true)
+    {
+        var args = new List<string> { "--ignore-config", "--encoding", "utf-8", "--socket-timeout", "20", "--retries", "0", "--fragment-retries", "0", "--extractor-retries", "0" };
+        if (paced) { args.Add("--sleep-requests"); args.Add(Pace.ToString(CultureInfo.InvariantCulture)); }
+        args.Add("--no-colors");
         if (Browser != "") { args.Add("--cookies-from-browser"); args.Add(Browser); }
         return args;
+    }
+    public static bool IsInstagramProfile(string url)
+    {
+        Uri uri;
+        if (!Uri.TryCreate(url ?? "", UriKind.Absolute, out uri)) return false;
+        string host = uri.Host.ToLowerInvariant();
+        if (host != "instagram.com" && !host.EndsWith(".instagram.com")) return false;
+        string[] parts = uri.AbsolutePath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return false;
+        string first = parts[0].ToLowerInvariant();
+        if (first == "p" || first == "reel" || first == "reels" && parts.Length > 1 || first == "tv" || first == "stories" || first == "explore" || first == "share") return false;
+        return true;
     }
     public async Task<ResourceInfo> Analyze(string url, CancellationToken token)
     {
         if (!Safety.ValidUrl(url)) throw new ArgumentException("Use an HTTP(S) page URL without credentials or authentication tokens.");
         if (Held(url)) throw new InvalidOperationException("Source is on hold. Review authentication/rate limit before releasing it.");
         if (Updating) throw new InvalidOperationException("Wait for the engine update.");
+        if (IsInstagramProfile(url)) throw new UnsupportedResourceException();
         Analyzing++; Changed();
         try {
-        var args = Common(); args.AddRange(new[] { "--flat-playlist", "--lazy-playlist", "--playlist-end", "1", "--dump-single-json", "--skip-download", "--", url });
+        var args = Common(false); args.AddRange(new[] { "--flat-playlist", "--lazy-playlist", "--playlist-end", "1", "--dump-single-json", "--skip-download", "--no-warnings", "--", url });
         ResourceInfo info = null;
         var result = await Engine.Run("yt-dlp", args, Engine.BaseDirectory, delegate(string line) { if (line.StartsWith("{")) info = Metadata.Resource(Metadata.Parse(line), url); }, Log, token, 60);
         Restrict(url, result);
@@ -266,12 +315,13 @@ public class DownloadManager
         finally { Discovering = false; discovery.Dispose(); discovery = null; Save(); }
     }
     public void StopDiscovery() { if (discovery != null) discovery.Cancel(); }
-    public bool Add(string url, string title, string extractor, string mediaId, CollectionJob collection)
+    public bool Add(string url, string title, string extractor, string mediaId, CollectionJob collection, string thumb = null, int duration = 0, string channel = null)
     {
         if (!Safety.ValidUrl(url)) return false;
         var item = new DownloadItem { Url = url, OriginalUrl = collection == null ? url : collection.Url, Title = title, Extractor = extractor,
             MediaId = mediaId, Mode = collection == null ? State.Mode : collection.Mode, Premiere = collection == null ? State.Premiere : collection.Premiere,
-            Destination = collection == null ? State.Destination : collection.Destination, CollectionId = collection == null ? null : collection.Id };
+            Destination = collection == null ? State.Destination : collection.Destination, CollectionId = collection == null ? null : collection.Id,
+            Thumb = thumb, Duration = duration, Channel = channel, Quality = State.Quality ?? "best", GifStart = State.GifStart, GifDuration = State.GifDuration, GifWidth = State.GifWidth };
         if (collection != null && collection.OwnFolder) item.Destination = Path.Combine(item.Destination, "Collection-" + collection.Id.Substring(0, 8));
         if (State.Duplicates && (State.Queue.Any(q => (q.Key == item.Key || (q.Url == item.Url && q.Variant == item.Variant)) && q.Status != "Cancelled" && q.Status != "Failed" && (q.Status != "Completed" || File.Exists(q.OutputFile)))
             || State.History.Any(h => (h.Key == item.Key || (h.Url == item.Url && h.Key.EndsWith("|" + item.Variant))) && File.Exists(h.OutputFile)))) return false;
@@ -285,7 +335,7 @@ public class DownloadManager
         foreach (CollectionEntry entry in job.Entries.Where(e => e.Status == "Discovered"))
         {
             if (!Metadata.Eligible(entry, job.Filter)) continue;
-            if (Add(entry.Url, entry.Title, entry.Extractor, entry.Id, job)) { entry.Status = "Queued"; count++; }
+            if (Add(entry.Url, entry.Title, entry.Extractor, entry.Id, job, entry.Thumb, entry.Duration, entry.Channel)) { entry.Status = "Queued"; count++; }
             else entry.Status = "Duplicate";
             if (count >= job.BatchSize) break;
         }
@@ -311,6 +361,23 @@ public class DownloadManager
     {
         if (ActiveId == item.Id) return;
         item.Status = "Pending"; item.Error = ""; item.Percent = null; Save();
+    }
+    // Completed entries older than the retention period leave the list. Downloaded files are never touched.
+    public int PruneCompleted(int days)
+    {
+        if (days <= 0) return 0;
+        DateTime limit = DateTime.UtcNow.AddDays(-days);
+        int removed = State.Queue.RemoveAll(q => q.Status == "Completed" && q.Updated < limit);
+        // Old playlists with nothing left to choose also leave the state.
+        removed += State.Collections.RemoveAll(j => j.Created < limit && j.Status != "Discovering" && !j.Entries.Any(e => e.Status == "Discovered"));
+        if (removed > 0) Save();
+        return removed;
+    }
+    public void RemoveCollection(CollectionJob job)
+    {
+        if (job == null) return;
+        if (Discovering && discoveryUrl == job.Url) StopDiscovery();
+        State.Collections.Remove(job); Save();
     }
     public void Remove(DownloadItem item)
     {
@@ -347,7 +414,7 @@ public class DownloadManager
                     item.Error = Safety.Redact(ex.Message); UpdateEntry(item, item.Status); Log("FAIL: " + item.Error);
                 }
                 finally { item.Updated = DateTime.UtcNow; ActiveId = null; active.Dispose(); active = null; if (item.RemoveWhenStopped) { Safety.Cleanup(item); UpdateEntry(item,"Discovered"); State.Queue.Remove(item); } Save(); }
-                if (Running) { try { await Task.Delay(TimeSpan.FromSeconds(State.PaceSeconds), queueStop.Token); } catch (OperationCanceledException) { break; } }
+                if (Running) { try { await Task.Delay(TimeSpan.FromSeconds(Pace), queueStop.Token); } catch (OperationCanceledException) { break; } }
             }
         }
         finally { Running = false; queueStop.Dispose(); queueStop = null; Save(); }
@@ -359,11 +426,22 @@ public class DownloadManager
         var entry = job.Entries.FirstOrDefault(e => e.Url == item.Url);
         if (entry != null) entry.Status = status;
     }
-    public static List<string> ModeArguments(MediaMode mode)
+    public static List<string> ModeArguments(MediaMode mode) { return ModeArguments(mode, "best"); }
+    public static List<string> ModeArguments(MediaMode mode, string quality)
     {
         if (mode == MediaMode.Mp3) return new List<string> { "-f", "ba/b", "-x", "--audio-format", "mp3", "--audio-quality", "0" };
-        if (mode == MediaMode.VideoOnly) return new List<string> { "-f", "bv[vcodec^=avc1][ext=mp4]/bv[ext=mp4]/bv/b", "--merge-output-format", "mp4" };
-        return new List<string> { "-f", "bv[vcodec^=avc1][ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv+ba/b", "--merge-output-format", "mp4" };
+        if (mode == MediaMode.Wav) return new List<string> { "-f", "ba/b", "-x", "--audio-format", "wav" };
+        if (mode == MediaMode.Thumbnail) return new List<string> { "--skip-download", "--write-thumbnail", "--convert-thumbnails", "jpg" };
+        if (mode == MediaMode.Gif) return new List<string> { "-f", "bv*[height<=720]/b[height<=720]/bv*/b" };
+        int height;
+        string h = Int32.TryParse(quality, out height) && height > 0 ? "[height<=" + height + "]" : "";
+        if (mode == MediaMode.VideoOnly) return new List<string> { "-f", "bv[vcodec^=avc1][ext=mp4]" + h + "/bv[ext=mp4]" + h + "/bv" + h + "/b" + h + "/b", "--merge-output-format", "mp4" };
+        return new List<string> { "-f", "bv[vcodec^=avc1][ext=mp4]" + h + "+ba[ext=m4a]/b[ext=mp4]" + h + "/bv" + h + "+ba/b" + h + "/b", "--merge-output-format", "mp4" };
+    }
+    public static List<string> GifArguments(string source, string output, int width, int fps)
+    {
+        string filter = "fps=" + fps + ",scale=" + Math.Max(120, Math.Min(1280, width)) + ":-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer:bayer_scale=4";
+        return new List<string> { "-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", source, "-an", "-vf", filter, "-loop", "0", output };
     }
     public static List<string> ConversionArguments(string source, string output, bool silent)
     {
@@ -395,8 +473,11 @@ public class DownloadManager
             // Rebuild from outputs that still exist, scoped to this artifact variant.
             var records = State.Queue.Where(q => q.Status == "Completed" && q.Variant == item.Variant && File.Exists(q.OutputFile) && !String.IsNullOrEmpty(q.MediaId) && !String.IsNullOrEmpty(q.Extractor));
             File.WriteAllLines(archive, State.Duplicates ? records.Select(q => q.Extractor.ToLowerInvariant() + " " + q.MediaId).ToArray() : new string[0]);
-            var args = Common(); args.AddRange(ModeArguments(item.Mode));
-            args.AddRange(new[] { "--no-playlist", "--max-downloads", "1", "--no-simulate", "--progress", "--newline", "--continue", "--no-overwrites", "--download-archive", archive,
+            var args = Common(); args.AddRange(ModeArguments(item.Mode, item.Quality));
+            if (item.Mode == MediaMode.Gif) args.AddRange(new[] { "--download-sections", "*" + item.GifStart + "-" + (item.GifStart + Math.Max(1, item.GifDuration)), "--force-keyframes-at-cuts" });
+            // Thumbnails are never skipped by the download archive and need no simulate override.
+            if (item.Mode != MediaMode.Thumbnail) args.AddRange(new[] { "--no-simulate", "--download-archive", archive });
+            args.AddRange(new[] { "--no-playlist", "--max-downloads", "1", "--progress", "--newline", "--continue", "--no-overwrites",
                 "-o", Path.Combine(work, "%(title).100s [%(id).60s].%(ext)s"),
                 "--print", "before_dl:M|%(extractor_key)j|%(id)j", "--print", "after_move:F|%(filepath)j",
                 "--progress-template", "download:P|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.speed)s", "--", item.Url });
@@ -423,15 +504,31 @@ public class DownloadManager
                 if (result.Restricted) { Restrict(item.Url, result); throw new IOException(result.Restriction); }
                 if (result.Code == 0 || result.Code == 101) break;
                 if (attempt == 2 || !Regex.IsMatch(result.Error, @"(?i)timed? out|temporary|connection reset|\b50[0234]\b")) break;
-                Log("Transient failure; retrying conservatively."); await Task.Delay(TimeSpan.FromSeconds(Math.Max(10, State.PaceSeconds) * (attempt + 1)), token);
+                Log("Transient failure; retrying conservatively."); await Task.Delay(TimeSpan.FromSeconds(Math.Max(10, Pace) * (attempt + 1)), token);
             }
             if (result.Code != 0 && result.Code != 101) throw new IOException("Engine failed: " + result.Error);
+            if (item.Mode == MediaMode.Thumbnail && !File.Exists(item.SourceFile))
+            {
+                // A thumbnail run prints no output path; pick the converted image from this job's own workspace.
+                string image = Directory.GetFiles(work, "*.jpg").FirstOrDefault();
+                if (image != null && Safety.Inside(image, work)) { item.SourceFile = image; Save(); }
+            }
             if (!File.Exists(item.SourceFile)) throw new IOException("No output artifact returned. The item may be unsupported, unavailable, or archived.");
         }
+        // An item added before its metadata arrived gets its title from the downloaded file name.
+        if (String.IsNullOrEmpty(item.Title) && !String.IsNullOrEmpty(item.SourceFile)) item.Title = Regex.Replace(Path.GetFileNameWithoutExtension(item.SourceFile), @"\s*\[[^\]]+\]$", "");
         token.ThrowIfCancellationRequested();
         if (!Safety.Inside(item.SourceFile, work)) throw new IOException("Source is outside this job's workspace.");
         string output = item.SourceFile;
-        if (item.Premiere && item.Mode != MediaMode.Mp3)
+        if (item.Mode == MediaMode.Gif)
+        {
+            item.Status = "Converting"; item.Percent = null; Save();
+            output = Path.Combine(work, "Clip.gif");
+            var gif = await Engine.Run("ffmpeg", GifArguments(item.SourceFile, output, item.GifWidth, 12), work, delegate { }, Log, token, 0);
+            if (gif.Code != 0 || !File.Exists(output)) throw new IOException("GIF conversion failed. Source kept; Retry will reuse it.");
+        }
+        token.ThrowIfCancellationRequested();
+        if (item.UsePremiere)
         {
             item.Status = "Converting"; item.Percent = null; Save();
             output = Path.Combine(work, "Premiere.mp4");
@@ -439,7 +536,7 @@ public class DownloadManager
             if (result.Code != 0) throw new IOException("Premiere conversion failed. Source kept; Retry will reuse it.");
         }
         token.ThrowIfCancellationRequested();
-        if (item.Mode == MediaMode.VideoOnly && !item.Premiere)
+        if (item.Mode == MediaMode.VideoOnly && !item.UsePremiere)
         {
             item.Status = "Converting"; item.Percent = null; Save();
             output = Path.Combine(work, "VideoOnly" + Path.GetExtension(item.SourceFile));
@@ -447,11 +544,11 @@ public class DownloadManager
             if (stripped.Code != 0) throw new IOException("Unable to produce a video-only artifact. Source kept for retry.");
         }
         token.ThrowIfCancellationRequested();
-        string name = Path.GetFileNameWithoutExtension(item.SourceFile) + (item.Premiere && item.Mode != MediaMode.Mp3 ? "_Premiere" : "") + "_" + item.Variant;
+        string name = Path.GetFileNameWithoutExtension(item.SourceFile) + (item.UsePremiere ? "_Premiere" : "") + "_" + item.Variant;
         string target = Path.Combine(item.Destination, name + "_" + item.Id.Substring(0, 8) + Path.GetExtension(output));
         if (File.Exists(target)) target = Path.Combine(item.Destination, name + "_" + item.Id + "_" + DateTime.UtcNow.Ticks + Path.GetExtension(output));
         File.Move(output, target); item.OutputFile = target; Save();
-        if (!item.Premiere) item.SourceFile = null;
+        if (!item.UsePremiere) item.SourceFile = null;
     }
     public async Task UpdateEngine()
     {
