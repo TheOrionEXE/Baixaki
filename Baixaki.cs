@@ -360,7 +360,12 @@ partial class BaixakiForm : Form
             if (manager.Updating) { preview.Message("Atualizando o motor de download… tentando de novo em instantes.", false); if (debounce != null) { debounce.Interval = 2500; debounce.Start(); } }
             else { preview.Message(manager.Held(url) ? "A fonte está em pausa por uma restrição de acesso. Veja a Ajuda antes de tentar de novo." : "Não foi possível analisar este link.", true); Log(Safety.Redact(ex.Message)); }
         }
-        catch (Exception ex) { if (urlInput.Box.Text.Trim() == url) preview.Message("Não foi possível identificar este link. Veja o registro técnico nas configurações.", true); Log(Safety.Redact(ex.Message)); }
+        catch (Exception ex)
+        {
+            string friendly = UiText.Friendly(ex.Message);
+            if (urlInput.Box.Text.Trim() == url) preview.Message(friendly != ex.Message ? friendly : "Não foi possível identificar este link. Veja o registro técnico nas configurações.", true);
+            Log(Safety.Redact(ex.Message));
+        }
         finally { if (analysis == cancellation) analysis = null; cancellation.Dispose(); if (debounce != null) debounce.Interval = 350; if (!IsDisposed) RefreshUi(); }
     }
     async Task AddUrl()
@@ -438,7 +443,7 @@ partial class BaixakiForm : Form
             case "Pending": row.Right = "Na fila"; row.Sub = meta; row.Actions = new[] { "remove" }; break;
             case "Paused": row.Right = "Pausado"; row.Sub = meta; row.Actions = new[] { "remove" }; break;
             case "Failed":
-                row.State = 2; row.Right = "Falhou"; row.Sub = String.IsNullOrEmpty(q.Error) ? "Erro desconhecido" : Trim(Safety.Redact(q.Error), 110); row.Actions = new[] { "retry", "remove" }; break;
+                row.State = 2; row.Right = "Falhou"; row.Sub = Trim(UiText.Friendly(Safety.Redact(q.Error)), 110); row.Actions = new[] { "details", "retry", "remove" }; break;
             case "Blocked": row.State = 2; row.Right = "Fonte em pausa"; row.Sub = "Aguarde antes de tentar de novo"; row.Actions = new[] { "retry", "remove" }; break;
             case "Cancelled": row.Right = "Cancelado"; row.Sub = meta; row.Actions = new[] { "retry", "remove" }; break;
             default:
@@ -547,6 +552,7 @@ partial class BaixakiForm : Form
                 case "retry": manager.Retry(item); if (manager.State.AutoStart) StartQueue(); break;
                 case "play": OpenOutput(item, false); break;
                 case "folder": OpenOutput(item, true); break;
+                case "details": ShowDetails(item); break;
             }
             RefreshUi(); return;
         }
@@ -571,6 +577,15 @@ partial class BaixakiForm : Form
         }
         var pair = row.Tag as object[];
         if (pair != null && action == "check") { var entry = (CollectionEntry)pair[1]; entry.Skip = !entry.Skip; manager.Save(); RefreshUi(); }
+    }
+    // Everything needed to understand (or report) a failed download, in one copyable box.
+    void ShowDetails(DownloadItem item)
+    {
+        string work = ""; try { work = Safety.WorkDirectory(item); } catch { }
+        string text = (String.IsNullOrEmpty(item.Title) ? "Sem título" : item.Title) + "\n\nSituação: " + UiText.Status(item.Status) + "\nFormato: " + UiText.Mode(item.Mode, item.Premiere)
+            + "\nDestino: " + item.Destination + "\nPasta de trabalho: " + work + "\nBaixaki " + AppVersion
+            + (String.IsNullOrEmpty(item.Error) ? "" : "\n\nErro informado pelo motor:\n" + item.Error);
+        MessageBox.Show(this, text, "Detalhes do download", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
     void QueueCollection(CollectionJob job)
     {

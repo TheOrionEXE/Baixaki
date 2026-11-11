@@ -2,7 +2,7 @@
 
 Este guia vale para qualquer versão. O aplicativo oferece a atualização **sozinho** a quem já o usa, mas só enxerga uma versão nova quando existe uma **release publicada** com o instalador anexado. O código sozinho no repositório não basta.
 
-Repositório: `TheOrionEXE/Baixaki`. Versão atual: **1.2.0** (tag `v1.2.0`).
+Repositório: `TheOrionEXE/Baixaki`. Versão atual: **1.2.1** (tag `v1.2.1`).
 
 ## Como o atualizador decide
 
@@ -20,19 +20,29 @@ Se a tag for maior que a versão instalada, o aplicativo pergunta se deve atuali
 3. **Gere o instalador** (precisa do Inno Setup 6):
 
    ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.0 -NonInteractive -NoOpen
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.1 -NonInteractive -NoOpen
    ```
 
    A saída é `Output\BaixakiSetup.exe`. Grave o hash em `Output\SHA256SUMS.txt` e no `IMPLEMENTATION-REPORT.md`.
 4. **Envie o código** para o repositório (somente código, documentação e imagens; executáveis, motores, `Output` e `test-output` ficam fora, o `.gitignore` já cuida disso).
 5. **Publique a release** em GitHub > Releases > Draft a new release:
-   - Tag: `v1.2.0` (criada ao publicar, na branch `main`).
-   - Título: `Baixaki v1.2.0 — Nova interface, GIF e análise sem espera`.
+   - Tag: `v1.2.1` (criada ao publicar, na branch `main`).
+   - Título: `Baixaki v1.2.1 — Corrige download em pastas redirecionadas`.
    - Anexos: `BaixakiSetup.exe` e `SHA256SUMS.txt`.
    - Marque como **latest release**. Pré-lançamentos não são vistos pelo atualizador.
 6. **Confira:** abra a lista de releases e veja se o anexo `BaixakiSetup.exe` aparece; instale a versão anterior em um computador de teste e use Configurações > Baixaki > Verificar.
 
-Nunca republique uma tag existente com outro instalador: quem já atualizou não receberia a correção. Se corrigir algo, gere uma versão nova (por exemplo 1.2.1 e `v1.2.1`).
+Nunca republique uma tag existente com outro instalador: quem já atualizou não receberia a correção. Se corrigir algo, gere uma versão nova (por exemplo 1.2.2 e `v1.2.2`).
+
+## Notas da release 1.2.1
+
+> Correção para o erro "O caminho não pode ser atravessado porque contém um ponto de montagem não confiável" (WinError 448), que impedia downloads em PCs onde a pasta Downloads foi redirecionada.
+>
+> - O Baixaki grava no endereço real da pasta de destino, sem cópia extra, também para arquivos grandes.
+> - Downloads com erro ganharam um botão de **detalhes** com o erro completo.
+> - A pasta padrão em instalações novas agora é **Vídeos**. Quem já escolheu outra pasta mantém a dela.
+>
+> SHA-256 do instalador: `29D9AC50C8EACA2684F1427FD4C9DFAAA12DE60DCFC4E7F5D288354A6D4C433C`
 
 ## Notas da release 1.2.0
 
@@ -51,7 +61,7 @@ Nunca republique uma tag existente com outro instalador: quem já atualizou não
 >
 > **Instalação:** baixe e execute `BaixakiSetup.exe`. Quem já usa o Baixaki recebe a atualização dentro do aplicativo. A fila e as configurações são mantidas.
 >
-> SHA-256 do instalador: `40E2FEFB1EA73F0887AFF01C1673330BBBCD426A6BF688EE87BF63F699C098D0`
+> SHA-256 do instalador 1.2.0: `40E2FEFB1EA73F0887AFF01C1673330BBBCD426A6BF688EE87BF63F699C098D0`
 
 ## Descrição do repositório (About)
 

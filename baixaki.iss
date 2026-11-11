@@ -2,7 +2,7 @@
 ; Installs per-user (no admin needed) so yt-dlp can update itself.
 ; The version comes from Baixaki.cs (build-installer.ps1 passes it in).
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.0"
+  #define MyAppVersion "1.2.1"
 #endif
 
 [Setup]

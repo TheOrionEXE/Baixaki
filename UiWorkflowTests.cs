@@ -141,6 +141,11 @@ class UiWorkflowTests
             Check(topics.Count == 12 && Convert.ToString(topics[1]["warning"]).Contains("restrições na conta") && Convert.ToString(topics[1]["body"]).Contains("Instagram"), "12 embedded help topics, with the profile/account risk and the Instagram limitation");
             Check(!json.Contains("Opções avançadas") && !json.Contains("Analisar link") && json.Contains("12 dias"), "help no longer mentions the old screen and explains the 12-day history");
         }
+        // 5d. a Windows "blocked folder" error (WinError 448) is shown as one clear sentence, other errors stay as reported
+        {
+            string blocked = UiText.Friendly("ERROR: [WinError 448] The path cannot be traversed because it contains an untrusted mount point");
+            Check(blocked.Contains("pasta") && blocked.Contains("Vídeos") && UiText.Friendly("Connection reset") == "Connection reset" && UiText.Friendly("") == "Erro desconhecido", "WinError 448 becomes a clear message; other errors are unchanged");
+        }
         // 5c. the program icon is embedded: the window and the header logo never fall back to a generic icon
         {
             using (var form = Open(new SimulatedEngine(), "icon"))

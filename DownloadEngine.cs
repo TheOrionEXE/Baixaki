@@ -461,6 +461,8 @@ public class DownloadManager
     async Task Download(DownloadItem item, CancellationToken token)
     {
         string work = Safety.WorkDirectory(item); Directory.CreateDirectory(work);
+        // A source kept by an older version lives elsewhere (inside the destination): download again instead of reusing it.
+        if (!String.IsNullOrEmpty(item.SourceFile) && !Safety.Inside(item.SourceFile, work)) item.SourceFile = null;
         if (File.Exists(item.OutputFile)) return;
         if (State.Duplicates)
         {
@@ -547,6 +549,7 @@ public class DownloadManager
         string name = Path.GetFileNameWithoutExtension(item.SourceFile) + (item.UsePremiere ? "_Premiere" : "") + "_" + item.Variant;
         string target = Path.Combine(item.Destination, name + "_" + item.Id.Substring(0, 8) + Path.GetExtension(output));
         if (File.Exists(target)) target = Path.Combine(item.Destination, name + "_" + item.Id + "_" + DateTime.UtcNow.Ticks + Path.GetExtension(output));
+        Directory.CreateDirectory(item.Destination);
         File.Move(output, target); item.OutputFile = target; Save();
         if (!item.UsePremiere) item.SourceFile = null;
     }

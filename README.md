@@ -2,7 +2,7 @@
 
 **Gerenciador de downloads para Windows com yt-dlp e FFmpeg.**
 
-O Baixaki baixa vídeos, áudios, GIFs e playlists em uma interface nativa, escura e enxuta. A versão **1.2.0** traz uma interface totalmente nova: um campo único para colar o link, miniaturas em todos os vídeos, abas separadas para a **Fila** e os **Concluídos**, novos formatos (GIF, WAV, miniatura) e uma análise de links sem espera.
+O Baixaki baixa vídeos, áudios, GIFs e playlists em uma interface nativa, escura e enxuta. A série **1.2** traz uma interface totalmente nova: um campo único para colar o link, miniaturas em todos os vídeos, abas separadas para a **Fila** e os **Concluídos**, novos formatos (GIF, WAV, miniatura) e uma análise de links sem espera.
 
 Os sites e recursos disponíveis dependem do [yt-dlp instalado](https://github.com/yt-dlp/yt-dlp), dos extratores e das condições de acesso de cada serviço.
 
@@ -83,7 +83,7 @@ O uso de cookies depende do suporte do yt-dlp e do acesso permitido pelo navegad
 
 ## Estado e recuperação
 
-O estado é salvo em `%APPDATA%\Baixaki\state.json`, com substituição atômica e uma cópia de segurança `state.json.bak`. As miniaturas ficam em um cache em `%APPDATA%\Baixaki\thumbs`, limpo automaticamente. As pastas de trabalho ficam em `<destino>\.baixaki\<id-da-tarefa>`; não as apague enquanto precisar recuperar downloads ou conversões.
+O estado é salvo em `%APPDATA%\Baixaki\state.json`, com substituição atômica e uma cópia de segurança `state.json.bak`. As miniaturas ficam em um cache em `%APPDATA%\Baixaki\thumbs`, limpo automaticamente. As pastas de trabalho ficam em `<destino>\.baixaki\<id-da-tarefa>` (no endereço real da pasta, mesmo que ela seja uma junção ou esteja redirecionada); não as apague enquanto precisar recuperar downloads ou conversões. Se mesmo assim o Windows bloquear o yt-dlp nesse caminho (erro 448), o Baixaki avisa e sugere escolher uma pasta comum, como Vídeos, que é a pasta padrão em instalações novas.
 
 O histórico diferencia MP4, Premiere, GIF, MP3, WAV e miniatura, e também a qualidade escolhida. A prevenção de duplicatas verifica se os arquivos de saída ainda existem. As linhas de Concluídos saem da lista após 12 dias; isso não apaga nenhum arquivo.
 
@@ -101,10 +101,10 @@ Para gerar o instalador com o fluxo interativo existente:
 build-installer.bat
 ```
 
-Para uma compilação automatizada da versão 1.2.0:
+Para uma compilação automatizada da versão 1.2.1:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.0 -NonInteractive -NoOpen
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.1 -NonInteractive -NoOpen
 ```
 
 O instalador requer Inno Setup 6. O script reutiliza os motores locais quando presentes; quando faltam, tenta obtê-los conforme o fluxo de compilação. Caso o compilador Inno Setup esteja em outro local, informe `-IsccPath "C:\caminho\ISCC.exe"`.
@@ -125,13 +125,13 @@ Para incluir a integração com yt-dlp e FFmpeg reais em um servidor HTTP tempor
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test.ps1 -Integration
 ```
 
-Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.2.0 e seus limites.
+Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.2.1 e seus limites.
 
 ## Atualizações
 
 O yt-dlp se atualiza sozinho uma vez por dia (e há um botão **Verificar** nas configurações). O Baixaki também procura versões novas na release mais recente de `TheOrionEXE/Baixaki` ao abrir e oferece a atualização dentro do aplicativo.
 
-Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.0`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente; o passo a passo está em [GITHUB-UPDATE.md](GITHUB-UPDATE.md).
+Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.1`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente; o passo a passo está em [GITHUB-UPDATE.md](GITHUB-UPDATE.md).
 
 ## Componentes e licenças
 

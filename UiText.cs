@@ -1,8 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.RegularExpressions;
 public static class UiText
 {
+    // Turns known engine errors into one clear sentence; anything else is shown as the engine reported it.
+    public static string Friendly(string error)
+    {
+        if (String.IsNullOrEmpty(error)) return "Erro desconhecido";
+        if (Regex.IsMatch(error, @"(?i)WinError 448|untrusted mount|ponto de montagem n.o confi")) return "O Windows bloqueou o caminho de uma pasta (junção ou pasta redirecionada). Escolha uma pasta de destino comum, como Vídeos.";
+        return error;
+    }
     public static readonly string[] Filters={"All accessible media","Videos only (known metadata)","Audio-compatible only (known metadata)","Other media: unsupported"};
     public const string Unsupported="Este link não é atendido pelo yt-dlp instalado. Links de vídeos individuais ainda podem funcionar. Escolher Coleção ou ativar cookies não corrige um extrator ausente ou quebrado.";
     public static string Mode(MediaMode mode,bool premiere)

@@ -1,17 +1,17 @@
-# Relatório de implementação — Baixaki 1.2.0
+# Relatório de implementação — Baixaki 1.2.1
 
-Este relatório descreve o que mudou na versão 1.2.0, como foi validado e o que **não** foi validado.
+Este relatório descreve a série 1.2 (a interface nova da 1.2.0 e as correções da 1.2.1), como foi validado e o que **não** foi validado.
 
 ## Entregas
 
-- `Baixaki.exe`: aplicativo v1.2.0; versão de arquivo e assembly `1.2.0.0`.
-- `Output/BaixakiSetup.exe`: instalador v1.2.0, com o mesmo AppId e o mesmo nome esperado pelo atualizador.
+- `Baixaki.exe`: aplicativo v1.2.1; versão de arquivo e assembly `1.2.1.0`.
+- `Output/BaixakiSetup.exe`: instalador v1.2.1, com o mesmo AppId e o mesmo nome esperado pelo atualizador.
 - `Output/SHA256SUMS.txt`: hash do instalador.
 
-SHA-256 do `BaixakiSetup.exe` (79.794.755 bytes):
+SHA-256 do `BaixakiSetup.exe` (79.783.382 bytes):
 
 ```
-40E2FEFB1EA73F0887AFF01C1673330BBBCD426A6BF688EE87BF63F699C098D0
+29D9AC50C8EACA2684F1427FD4C9DFAAA12DE60DCFC4E7F5D288354A6D4C433C
 ```
 
 Se o instalador for recompilado, o hash muda: atualize este arquivo e o `SHA256SUMS.txt`.
@@ -30,10 +30,17 @@ Se o instalador for recompilado, o hash muda: atualize este arquivo e o `SHA256S
 
 O motor de fila (`DownloadManager`, estado persistente, limites de acesso, duplicatas e recuperação) foi mantido e estendido, não reescrito.
 
+## Correções da 1.2.1
+
+- **Erro 448 em pasta redirecionada:** em alguns PCs o Windows bloqueia o yt-dlp quando a pasta de destino (como Downloads) foi movida por uma junção. O Baixaki agora resolve o endereço real da pasta e grava direto nele, sem copiar o arquivo no fim, o que vale também para arquivos grandes. Se o Windows ainda bloquear, a mensagem pede uma pasta comum, como Vídeos.
+- **Detalhes do erro:** downloads que falham ganharam um botão de detalhes com o erro completo, o destino e a pasta de trabalho.
+- **Pasta padrão:** em instalações novas passa a ser a pasta Vídeos do Windows. Quem já escolheu outra pasta mantém a dela.
+- Testado com o yt-dlp real baixando para uma pasta que é junção: concluiu, com os arquivos de trabalho no endereço real e o resultado entregue pelo caminho da junção.
+
 ## Validação realizada
 
 - Compilação no Windows com o compilador C# do .NET Framework (`build.bat` e `build-installer.ps1`).
-- `test.ps1`: **111** verificações do motor, **29** verificações de fluxo da interface e da ajuda, e renderização do layout em vários tamanhos (`test-output`).
+- `test.ps1`: **118** verificações do motor, **30** verificações de fluxo da interface e da ajuda, e renderização do layout em vários tamanhos (`test-output`).
 - Teste com o yt-dlp e o FFmpeg reais, em um vídeo público curto: análise concluída em cerca de 4,8 s; GIF de 5 s, WAV, miniatura JPG e MP4 720p concluídos.
 - Instalação silenciosa do `BaixakiSetup.exe` sobre uma instalação existente: sem erro, versão 1.2.0 no aplicativo e em Programas e Recursos, atalhos preservados.
 - Captura real da tela (não apenas renderização) para conferir o painel de configurações, a barra de título escura e o ícone.

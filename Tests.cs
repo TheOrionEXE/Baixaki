@@ -244,7 +244,25 @@ class Tests
             manager.State.Queue.Add(new DownloadItem { Url="https://media.example/pending", Status="Pending", Updated=DateTime.UtcNow.AddDays(-30) });
             Check(manager.PruneCompleted(12)==1 && manager.State.Queue.Count==2 && File.Exists(kept),"Completed entries leave the list after 12 days; files and pending items are kept");
         }
-        Check(AppInfo.Version=="1.2.0", "Application version 1.2.0");
+        // ---- 1.2.1: junctioned destinations (WinError 448) ----
+        {
+            string baseDir=Path.Combine(root,"junction-"+Guid.NewGuid().ToString("N")), target=Path.Combine(baseDir,"target"), link=Path.Combine(baseDir,"link");
+            Directory.CreateDirectory(target);
+            var mk=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe","/c mklink /J \""+link+"\" \""+target+"\"") { CreateNoWindow=true, UseShellExecute=false, RedirectStandardOutput=true }); mk.StandardOutput.ReadToEnd(); mk.WaitForExit();
+            Check(Directory.Exists(link) && Safety.HasReparsePoint(link),"Test junction was created");
+            Check(String.Equals(Safety.RealPath(link),target,StringComparison.OrdinalIgnoreCase),"Real path resolves a junction to its target");
+            Check(String.Equals(Safety.RealPath(Path.Combine(link,"new","deep")),Path.Combine(target,"new","deep"),StringComparison.OrdinalIgnoreCase),"Real path also resolves folders that do not exist yet");
+            var fake=new SimulatedEngine(); var manager=Manager(fake); manager.State.Destination=link;
+            manager.Add("https://media.example/junction","Junction",null,null,null); await manager.Start(); var item=manager.State.Queue[0];
+            Check(item.Status=="Completed" && File.Exists(item.OutputFile),"A download into a junctioned destination works through the real path, without a copy");
+            Check(Safety.WorkDirectory(item).StartsWith(target,StringComparison.OrdinalIgnoreCase) && !Safety.WorkDirectory(item).StartsWith(link,StringComparison.OrdinalIgnoreCase),"Work files are written on the real path, never through the junction");
+            var stale=new DownloadItem { Url="https://media.example/stale", Destination=link, Title="Stale", SourceFile=Path.Combine(root,"old-source.mp4") }; File.WriteAllText(stale.SourceFile,"old");
+            manager.State.Queue.Add(stale); await manager.Start();
+            Check(stale.Status=="Completed" && stale.SourceFile!=Path.Combine(root,"old-source.mp4"),"A kept source outside the work folder is discarded and downloaded again");
+            Directory.Delete(link);
+        }
+        { string videos=Environment.GetFolderPath(Environment.SpecialFolder.MyVideos); Check(new DownloadState().Destination==(String.IsNullOrEmpty(videos)?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Videos"):videos) && DownloadState.DefaultDestination()==new DownloadState().Destination,"New installs save to the Windows Videos folder by default"); }
+        Check(AppInfo.Version=="1.2.1", "Application version 1.2.1");
         Console.WriteLine("ALL " + passed + " CHECKS PASSED");
     }
     static int Main(string[] args)

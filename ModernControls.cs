@@ -106,7 +106,7 @@ public static class AppIcon
 public static class Glyph
 {
     public const string Close = "", Play = "", Folder = "", Retry = "", Delete = "", Down = "", Up = "", Right = "",
-        Settings = "", Link = "", Pause = "", Add = "", Search = "", Download = "", Check = "", Video = "";
+        Settings = "", Link = "", Pause = "", Add = "", Search = "", Download = "", Check = "", Video = "", Info = "\uE946";
 }
 public static class ModernPaint
 {
@@ -430,7 +430,7 @@ public class RowList : Control
     struct Hit { public Rectangle R; public string Action; }
     static readonly Dictionary<string, string> labels = new Dictionary<string, string> {
         { "cancel", "Cancelar download" }, { "retry", "Tentar de novo" }, { "play", "Abrir arquivo" }, { "folder", "Mostrar na pasta" },
-        { "remove", "Remover da lista" }, { "expand", "Mostrar ou ocultar os vídeos" }, { "check", "Marcar ou desmarcar" } };
+        { "remove", "Remover da lista" }, { "expand", "Mostrar ou ocultar os vídeos" }, { "check", "Marcar ou desmarcar" }, { "details", "Ver detalhes do erro" } };
     readonly Action loadedHandler;
     public RowList()
     {
@@ -581,7 +581,7 @@ public class RowList : Control
                 continue;
             }
             if (over) using (var path = ModernPaint.Round(new RectangleF(hit.R.X, hit.R.Y, hit.R.Width, hit.R.Height), Theme.S(7))) using (var brush = new SolidBrush(Theme.Line2)) g.FillPath(brush, path);
-            string glyph = hit.Action == "cancel" || hit.Action == "remove" ? Glyph.Close : hit.Action == "retry" ? Glyph.Retry : hit.Action == "play" ? Glyph.Play : hit.Action == "folder" ? Glyph.Folder : row.Expanded ? Glyph.Up : Glyph.Down;
+            string glyph = hit.Action == "cancel" || hit.Action == "remove" ? Glyph.Close : hit.Action == "retry" ? Glyph.Retry : hit.Action == "play" ? Glyph.Play : hit.Action == "folder" ? Glyph.Folder : hit.Action == "details" ? Glyph.Info : row.Expanded ? Glyph.Up : Glyph.Down;
             ModernPaint.Icon(g, glyph, hit.R, over ? Theme.Ink : Theme.Muted, hit.Action == "expand" ? 9F : 11F);
         }
     }

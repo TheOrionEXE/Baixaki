@@ -1,4 +1,4 @@
-# Guia avançado do Baixaki 1.2.0
+# Guia avançado do Baixaki 1.2.1
 
 Este guia reúne os mesmos tópicos da Central de ajuda do aplicativo (tecla F1, ou Configurações > Ajuda).
 
@@ -164,3 +164,5 @@ Falha na conversão (Premiere ou GIF): confira o espaço, as permissões e a pre
 O botão Registro, nas configurações, mostra o registro técnico da sessão, sem links, cookies ou credenciais.
 
 Para relatar um problema, informe a versão do Baixaki, a versão do yt-dlp, o formato escolhido, os passos para reproduzir e o erro já revisado. Identifique o serviço e o tipo de recurso sem dados privados.
+
+O Windows bloqueou o caminho de uma pasta (erro 448): acontece quando a pasta de destino, como Downloads, foi movida ou redirecionada por uma junção ou link. O Baixaki já grava no endereço real da pasta, sem cópia extra. Se a mensagem continuar, escolha uma pasta comum em Configurações > Pasta padrão, como Vídeos (a pasta padrão em instalações novas). Em um download com erro, o botão de detalhes mostra o erro completo e as pastas usadas.

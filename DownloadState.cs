@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
+using Microsoft.Win32.SafeHandles;
 
 public enum MediaMode { VideoAudio, VideoOnly, Mp3, Gif, Wav, Thumbnail }
 public class DownloadItem
@@ -12,8 +15,7 @@ public class DownloadItem
     public MediaMode Mode;
     public bool Premiere, RemoveWhenStopped;
     public string Destination, SourceFile, OutputFile, Status = "Pending", Error = "", Speed = "";
-    public string Thumb, Channel, Quality = "best";
-    public int Duration, GifStart, GifDuration = 8, GifWidth = 480;
+    public string Thumb, Channel, Quality = "best";    public int Duration, GifStart, GifDuration = 8, GifWidth = 480;
     public double? Percent;
     public DateTime Created = DateTime.UtcNow, Updated = DateTime.UtcNow;
     public int Attempts;
@@ -66,7 +68,13 @@ public class SourceHold
 public class DownloadState
 {
     public int Schema = 1;
-    public string Destination = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+    public string Destination = DefaultDestination();
+    // New installs save to the Windows Videos folder (an existing choice in state.json is kept).
+    public static string DefaultDestination()
+    {
+        string videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        return String.IsNullOrEmpty(videos) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Videos") : videos;
+    }
     public MediaMode Mode;
     public bool Premiere, Duplicates = true, PaceAuto = true, AutoStart = true, OwnFolder = true;
     public int PaceSeconds = 5, DefaultLimit = 0, KeepCompletedDays = 12;
@@ -151,11 +159,56 @@ public static class Safety
         result.Append('\\', slashes * 2); result.Append('"'); return result.ToString();
     }
     public static string Source(string url) { Uri uri; return Uri.TryCreate(url, UriKind.Absolute, out uri) ? uri.Host.ToLowerInvariant() : "unknown"; }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, StringBuilder path, uint length, uint flags);
+    // The real location of a folder: junctions and symbolic links are resolved. Windows can refuse to let the engine walk through
+    // a junction (WinError 448, common when Downloads was moved), but it works on the real path, with no copy of the finished file.
+    public static string RealPath(string path)
+    {
+        try
+        {
+            string full = Path.GetFullPath(path);
+            if (!Directory.Exists(full))
+            {
+                string parent = Path.GetDirectoryName(full);
+                return parent == null || parent == full ? full : Path.Combine(RealPath(parent), Path.GetFileName(full));
+            }
+            using (SafeFileHandle handle = CreateFile(full, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero))
+            {
+                if (handle.IsInvalid) return full;
+                var text = new StringBuilder(2048); uint length = GetFinalPathNameByHandle(handle, text, 2048, 0);
+                if (length == 0 || length >= 2048) return full;
+                string real = text.ToString();
+                if (real.StartsWith(@"\\?\UNC\")) return @"\\" + real.Substring(8);
+                return real.StartsWith(@"\\?\") ? real.Substring(4) : real;
+            }
+        }
+        catch { return path; }
+    }
+    public static bool HasReparsePoint(string path)
+    {
+        try
+        {
+            string current = Path.GetFullPath(path);
+            while (!String.IsNullOrEmpty(current))
+            {
+                if ((Directory.Exists(current) || File.Exists(current)) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
+                string parent = Path.GetDirectoryName(current);
+                if (parent == null || parent == current) break;
+                current = parent;
+            }
+        }
+        catch { }
+        return false;
+    }
     public static string WorkDirectory(DownloadItem item)
     {
         Guid id;
         if (!Guid.TryParseExact(item.Id, "N", out id)) throw new IOException("Invalid job identifier");
-        string destination = Path.GetFullPath(item.Destination), parent = Path.Combine(destination, ".baixaki"), work = Path.Combine(parent,item.Id);
+        // Work files live on the real path of the destination, so the engine never walks through a junction and the file is written once.
+        string destination = RealPath(item.Destination), parent = Path.Combine(destination, ".baixaki"), work = Path.Combine(parent,item.Id);
         foreach (string path in new[] { parent, work })
             if (Directory.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new IOException("Job workspace must not be a junction or symbolic link.");
         return work;
