@@ -21,6 +21,7 @@ class SimulatedEngine : EngineRunner
         }
         if (args.Contains("-U")) return new ProcessResult { Code = FailDownload ? 1 : 0 };
         if (Scenario == "unsupported") return new ProcessResult { Code=1, Error="ERROR: Unsupported URL: [URL]" };
+        if (Scenario == "restricted-noretry") return new ProcessResult { Code=1, Restricted=true, Restriction="Authentication or access restriction" };
         if (Scenario == "restricted") return new ProcessResult { Code=1, Restricted=true, Restriction="Rate limit", RetryAfter=DateTime.UtcNow.AddSeconds(60) };
         if (args.Contains("--dump-single-json"))
         {
@@ -179,7 +180,7 @@ class Tests
             Check(fake.Downloads==2 && manager.State.Queue[0].Status=="Completed","Bounded transient retry succeeds");
         }
         {
-            var manager=Manager(new SimulatedEngine()); manager.State.Holds.Add(new SourceHold { Source="media.example",Until=DateTime.UtcNow.AddMinutes(5) });
+            var manager=Manager(new SimulatedEngine()); manager.State.Holds.Add(new SourceHold { Source="media.example",Until=DateTime.UtcNow.AddMinutes(5),FromServer=true });
             bool refused=false; try { manager.ReleaseHolds(); } catch(InvalidOperationException) { refused=true; }
             Check(refused,"Retry-After cannot be cleared prematurely");
             manager.State.Holds[0].Until=DateTime.UtcNow.AddSeconds(-1); Check(!manager.Held("https://media.example/1"),"Timed source hold expires");
@@ -244,6 +245,18 @@ class Tests
             manager.State.Queue.Add(new DownloadItem { Url="https://media.example/pending", Status="Pending", Updated=DateTime.UtcNow.AddDays(-30) });
             Check(manager.PruneCompleted(12)==1 && manager.State.Queue.Count==2 && File.Exists(kept),"Completed entries leave the list after 12 days; files and pending items are kept");
         }
+        // ---- 1.2.2: a paused source must never block forever, and warnings must not pause it ----
+        {
+            Check(EngineRunner.ErrorRestriction("WARNING: [youtube] Sign in to confirm your age to see more formats")=="" && EngineRunner.ErrorRestriction("[download] HTTP Error 403: Forbidden")=="" && EngineRunner.ErrorRestriction("ERROR: [youtube] abc: Sign in to confirm you are not a bot")!="" && EngineRunner.ErrorRestriction("ERROR: HTTP Error 429: Too Many Requests")=="Rate limit","Only ERROR lines can pause a source; warnings are ignored");
+            var fake=new SimulatedEngine { Scenario="restricted-noretry" }; var manager=Manager(fake); bool blocked=false;
+            try { await manager.Analyze("https://media.example/blocked",CancellationToken.None); } catch(IOException) { blocked=true; }
+            var hold=manager.State.Holds.Single();
+            Check(blocked && hold.Until.HasValue && !hold.FromServer && hold.Until.Value>DateTime.UtcNow.AddMinutes(DownloadManager.HoldMinutes-2) && hold.Until.Value<DateTime.UtcNow.AddMinutes(DownloadManager.HoldMinutes+2),"A pause without a server deadline expires by itself after 20 minutes");
+            manager.ReleaseHolds(); Check(manager.State.Holds.Count==0 && !manager.Held("https://media.example/blocked"),"A pause that did not come from the server can be released at once");
+            string folder=Path.Combine(root,"legacy-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(folder); var store=new StateStore(folder); var old=new DownloadState(); old.Holds.Add(new SourceHold { Source="youtube.com",Reason="Authentication or access restriction" }); store.Save(old);
+            var reopened=new DownloadManager(store,new SimulatedEngine());
+            Check(reopened.State.Holds[0].Until.HasValue && reopened.State.Holds[0].Until.Value<DateTime.UtcNow.AddMinutes(6),"A pause saved by an older version, with no deadline, now expires within minutes");
+        }
         // ---- 1.2.1: junctioned destinations (WinError 448) ----
         {
             string baseDir=Path.Combine(root,"junction-"+Guid.NewGuid().ToString("N")), target=Path.Combine(baseDir,"target"), link=Path.Combine(baseDir,"link");
@@ -262,7 +275,7 @@ class Tests
             Directory.Delete(link);
         }
         { string videos=Environment.GetFolderPath(Environment.SpecialFolder.MyVideos); Check(new DownloadState().Destination==(String.IsNullOrEmpty(videos)?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"Videos"):videos) && DownloadState.DefaultDestination()==new DownloadState().Destination,"New installs save to the Windows Videos folder by default"); }
-        Check(AppInfo.Version=="1.2.1", "Application version 1.2.1");
+        Check(AppInfo.Version=="1.2.2", "Application version 1.2.2");
         Console.WriteLine("ALL " + passed + " CHECKS PASSED");
     }
     static int Main(string[] args)

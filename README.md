@@ -77,7 +77,7 @@ Para uma distribuição portátil, mantenha `Baixaki.exe`, `yt-dlp.exe` e `ffmpe
 
 **Listar perfis inteiros pode causar bloqueios temporários e restrições na conta**, especialmente usando cookies. A espera entre solicitações não elimina esse risco. Fora do YouTube, o programa pede confirmação antes de listar uma coleção. Comece com 10 itens, sem autenticação quando possível, e confira os resultados antes de ampliar a operação. O limite de itens não garante uma quantidade exata de requisições; o extrator pode consultar mais páginas.
 
-Limites de acesso e exigências claras de autenticação suspendem novas solicitações à fonte afetada. Quando o motor informa `Retry-After`, o prazo é respeitado. Sem prazo utilizável, a fonte fica em pausa até a liberação manual, em **Configurações > Fontes em pausa**, depois de você resolver a causa. Falhas transitórias têm até duas novas tentativas, com espera conservadora.
+Limites de acesso e exigências claras de autenticação suspendem novas solicitações à fonte afetada. Quando o motor informa `Retry-After`, o prazo é respeitado. Só linhas de erro do yt-dlp pausam uma fonte (avisos são ignorados). Sem prazo do servidor, a pausa termina sozinha em 20 minutos; o item parado mostra o motivo e você pode liberar antes em **Configurações > Diagnóstico > Fontes em pausa**, depois de resolver a causa. Falhas transitórias têm até duas novas tentativas, com espera conservadora.
 
 O uso de cookies depende do suporte do yt-dlp e do acesso permitido pelo navegador. O aplicativo não exporta cookies nem grava seus valores na fila ou no histórico, e a escolha de navegador vale somente na sessão. Use links sem credenciais ou tokens embutidos; diagnósticos sensíveis são ocultados no registro.
 
@@ -101,10 +101,10 @@ Para gerar o instalador com o fluxo interativo existente:
 build-installer.bat
 ```
 
-Para uma compilação automatizada da versão 1.2.1:
+Para uma compilação automatizada da versão 1.2.2:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.1 -NonInteractive -NoOpen
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-installer.ps1 -Version 1.2.2 -NonInteractive -NoOpen
 ```
 
 O instalador requer Inno Setup 6. O script reutiliza os motores locais quando presentes; quando faltam, tenta obtê-los conforme o fluxo de compilação. Caso o compilador Inno Setup esteja em outro local, informe `-IsccPath "C:\caminho\ISCC.exe"`.
@@ -125,13 +125,13 @@ Para incluir a integração com yt-dlp e FFmpeg reais em um servidor HTTP tempor
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test.ps1 -Integration
 ```
 
-Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.2.1 e seus limites.
+Esses testes não acessam contas pessoais nem baixam conteúdo de redes sociais. A integração local pode exigir permissão de rede no ambiente em que for executada. O [relatório de implementação](docs/IMPLEMENTATION-REPORT.md) descreve a validação da versão 1.2.2 e seus limites.
 
 ## Atualizações
 
 O yt-dlp se atualiza sozinho uma vez por dia (e há um botão **Verificar** nas configurações). O Baixaki também procura versões novas na release mais recente de `TheOrionEXE/Baixaki` ao abrir e oferece a atualização dentro do aplicativo.
 
-Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.1`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente; o passo a passo está em [GITHUB-UPDATE.md](GITHUB-UPDATE.md).
+Para distribuir uma atualização, a tag deve corresponder à versão, por exemplo `v1.2.2`, e o instalador anexado deve manter o nome **BaixakiSetup.exe**. Compilar os arquivos não publica uma release automaticamente; o passo a passo está em [GITHUB-UPDATE.md](GITHUB-UPDATE.md).
 
 ## Componentes e licenças
 

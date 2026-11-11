@@ -1,4 +1,4 @@
-# Guia avançado do Baixaki 1.2.1
+# Guia avançado do Baixaki 1.2.2
 
 Este guia reúne os mesmos tópicos da Central de ajuda do aplicativo (tecla F1, ou Configurações > Ajuda).
 
@@ -119,7 +119,7 @@ Um erro claro de limite, autenticação ou desafio de acesso coloca a fonte em p
 
 Quando o yt-dlp informa um prazo (Retry-After), ele é registrado e não pode ser removido antes de vencer.
 
-Sem prazo, a liberação é manual. Verifique a causa pelo acesso normal ao serviço, espere quando houver limite e só então use Fontes em pausa, na área Diagnóstico das configurações (o botão só aparece quando há uma fonte em pausa). Depois, use Tentar de novo nos itens bloqueados.
+Sem prazo do servidor, a pausa dura 20 minutos e termina sozinha. Só um erro de verdade pausa a fonte; avisos do yt-dlp são ignorados. O item parado mostra Fonte em pausa e o motivo. Se você já resolveu a causa (por exemplo, entrou na conta do site no navegador e escolheu Cookies do navegador nas configurações), libere antes em Configurações > Diagnóstico > Fontes em pausa (o botão só aparece quando há uma pausa ativa). Depois, use Tentar de novo nos itens bloqueados. Pausas gravadas por versões anteriores também passam a expirar em poucos minutos.
 
 As fontes são agrupadas pelo domínio da página. Isso é uma proteção conservadora: o aplicativo não sabe o alcance exato de uma restrição de conta ou de IP.
 

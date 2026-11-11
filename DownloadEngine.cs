@@ -36,6 +36,12 @@ public class EngineRunner
         if (Regex.IsMatch(line, @"(?i)\b401\b|\b403\b|sign.?in|log.?in|authentication|captcha|confirm.*bot|cookies.*required|private.*video")) return "Authentication or access restriction";
         return "";
     }
+    // Only genuine errors pause a source. yt-dlp prints many harmless WARNING lines that mention "sign in", "login" or "403";
+    // treating those as a block would stop downloads that would have worked.
+    public static string ErrorRestriction(string line)
+    {
+        return Regex.IsMatch(line ?? "", @"^\s*ERROR\b", RegexOptions.IgnoreCase) ? Restriction(line) : "";
+    }
     public static DateTime? RetryAfter(string line)
     {
         Match m = Regex.Match(line, @"(?i)retry-after\s*[:=]\s*(.+)");
@@ -79,7 +85,7 @@ public class EngineRunner
                 Task error = Read(process.StandardError, delegate(string line)
                 {
                     if (UnsupportedDiagnostic(line)) { result.Unsupported = true; Kill(process); }
-                    string restriction = Restriction(line);
+                    string restriction = ErrorRestriction(line);
                     if (restriction.Length > 0)
                     {
                         result.Restricted = true; result.Restriction = restriction;
@@ -195,8 +201,14 @@ public class DownloadManager
     CancellationTokenSource active, discovery, queueStop;
     string discoveryUrl;
     Task processing;
+    // A source paused without a server-provided deadline resumes by itself after this many minutes.
+    public const int HoldMinutes = 20;
     public DownloadManager(StateStore store, EngineRunner engine)
-    { Store = store; Engine = engine; State = store.Load(); }
+    {
+        Store = store; Engine = engine; State = store.Load();
+        // Holds saved by older versions never expired and kept refusing every request: give them a short deadline.
+        foreach (SourceHold hold in State.Holds) if (!hold.Until.HasValue) hold.Until = DateTime.UtcNow.AddMinutes(5);
+    }
     public void Save() { Store.Save(State); Changed(); }
     public bool Held(string url)
     {
@@ -205,7 +217,7 @@ public class DownloadManager
     }
     public void ReleaseHolds()
     {
-        if (State.Holds.Any(h => h.Until.HasValue && h.Until.Value > DateTime.UtcNow)) throw new InvalidOperationException("Server Retry-After has not elapsed.");
+        if (State.Holds.Any(h => h.FromServer && h.Until.HasValue && h.Until.Value > DateTime.UtcNow)) throw new InvalidOperationException("Server Retry-After has not elapsed.");
         State.Holds.Clear(); Save();
     }
     void Restrict(string url, ProcessResult result)
@@ -213,8 +225,9 @@ public class DownloadManager
         if (!result.Restricted) return;
         string source = Safety.Source(url);
         State.Holds.RemoveAll(h => h.Source == source);
-        State.Holds.Add(new SourceHold { Source = source, Reason = result.Restriction, Until = result.RetryAfter });
-        Save(); Log(source + ": " + result.Restriction + ". Further requests stopped. Review access before releasing the source hold.");
+        DateTime until = result.RetryAfter ?? DateTime.UtcNow.AddMinutes(HoldMinutes);
+        State.Holds.Add(new SourceHold { Source = source, Reason = result.Restriction, Until = until, FromServer = result.RetryAfter.HasValue });
+        Save(); Log(source + ": " + result.Restriction + ". Further requests are paused until " + until.ToLocalTime().ToString("HH:mm") + "; release it earlier in Settings once the cause is solved.");
         if (discovery != null && Safety.Source(discoveryUrl) == source) discovery.Cancel();
         if (active != null && State.Queue.Any(q => q.Id == ActiveId && (Safety.Source(q.Url) == source || Safety.Source(q.OriginalUrl) == source))) active.Cancel();
     }

@@ -64,6 +64,7 @@ public class SourceHold
 {
     public string Source, Reason;
     public DateTime? Until;
+    public bool FromServer; // true when the deadline came from the server (Retry-After): it cannot be released early
 }
 public class DownloadState
 {

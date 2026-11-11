@@ -4,6 +4,17 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 public static class UiText
 {
+    public static string HoldReason(string reason)
+    {
+        return reason == "Rate limit" ? "o site limitou os acessos" : "o site pediu login ou uma verificação";
+    }
+    // Why a source is paused and when it comes back, in one sentence.
+    public static string Hold(SourceHold hold)
+    {
+        if (hold == null) return "A fonte está em pausa por uma restrição de acesso.";
+        string when = hold.Until.HasValue ? " Volta sozinha às " + hold.Until.Value.ToLocalTime().ToString("HH:mm") + "." : "";
+        return "A fonte " + hold.Source + " está em pausa: " + HoldReason(hold.Reason) + "." + when + " Se já resolveu, libere em Configurações > Fontes em pausa.";
+    }
     // Turns known engine errors into one clear sentence; anything else is shown as the engine reported it.
     public static string Friendly(string error)
     {

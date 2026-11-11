@@ -358,7 +358,7 @@ partial class BaixakiForm : Form
         catch (InvalidOperationException ex)
         {
             if (manager.Updating) { preview.Message("Atualizando o motor de download… tentando de novo em instantes.", false); if (debounce != null) { debounce.Interval = 2500; debounce.Start(); } }
-            else { preview.Message(manager.Held(url) ? "A fonte está em pausa por uma restrição de acesso. Veja a Ajuda antes de tentar de novo." : "Não foi possível analisar este link.", true); Log(Safety.Redact(ex.Message)); }
+            else { preview.Message(manager.Held(url) ? UiText.Hold(manager.State.Holds.FirstOrDefault(h => h.Source == Safety.Source(url))) : "Não foi possível analisar este link.", true); Log(Safety.Redact(ex.Message)); }
         }
         catch (Exception ex)
         {
@@ -440,7 +440,15 @@ partial class BaixakiForm : Form
                 row.State = 1; row.Progress = q.Percent; row.Right = q.Percent.HasValue ? "" : "Baixando…";
                 string speed = UiText.Speed(q.Speed); row.Sub = speed == "—" ? meta : meta + " · " + speed; row.Actions = new[] { "cancel" }; break;
             case "Converting": row.State = 1; row.Right = "Convertendo…"; row.Sub = meta; row.Actions = new[] { "cancel" }; break;
-            case "Pending": row.Right = "Na fila"; row.Sub = meta; row.Actions = new[] { "remove" }; break;
+            case "Pending":
+                if (manager.Held(q.Url) || manager.Held(q.OriginalUrl))
+                {
+                    // Waiting on a paused source: say so, instead of looking like an ordinary queue.
+                    row.State = 2; row.Right = "Fonte em pausa";
+                    row.Sub = Trim(UiText.Hold(manager.State.Holds.FirstOrDefault(h => h.Source == Safety.Source(q.Url) || h.Source == Safety.Source(q.OriginalUrl))), 120);
+                }
+                else { row.Right = "Na fila"; row.Sub = meta; }
+                row.Actions = new[] { "remove" }; break;
             case "Paused": row.Right = "Pausado"; row.Sub = meta; row.Actions = new[] { "remove" }; break;
             case "Failed":
                 row.State = 2; row.Right = "Falhou"; row.Sub = Trim(UiText.Friendly(Safety.Redact(q.Error)), 110); row.Actions = new[] { "details", "retry", "remove" }; break;
@@ -536,7 +544,11 @@ partial class BaixakiForm : Form
             PlaceTabRow();
             string url = urlInput.Box.Text.Trim();
             urlInput.Button.Enabled = Safety.ValidUrl(url) && unsupportedUrl != url && !manager.Updating;
-            if (holdsButton != null) { holdsButton.Visible = manager.State.Holds.Count > 0; holdsButton.Text = "Fontes em pausa (" + manager.State.Holds.Count + ")"; }
+            if (holdsButton != null)
+            {
+                int paused = manager.State.Holds.Count(h => !h.Until.HasValue || h.Until.Value > DateTime.UtcNow);
+                holdsButton.Visible = paused > 0; holdsButton.Text = "Fontes em pausa (" + paused + ")";
+            }
         }
         finally { refreshing = false; }
     }
@@ -776,10 +788,11 @@ partial class BaixakiForm : Form
     }
     void ReleaseHolds()
     {
-        var timed = manager.State.Holds.Where(h => h.Until.HasValue && h.Until.Value > DateTime.UtcNow).ToList();
-        if (timed.Count > 0) { MessageBox.Show(this, "A fonte pediu uma espera até " + timed.Max(h => h.Until.Value).ToLocalTime() + ". Aguarde o prazo antes de tentar novamente.", "Fonte em pausa", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+        var timed = manager.State.Holds.Where(h => h.FromServer && h.Until.HasValue && h.Until.Value > DateTime.UtcNow).ToList();
+        if (timed.Count > 0) { MessageBox.Show(this, "O site pediu uma espera até " + timed.Max(h => h.Until.Value).ToLocalTime().ToString("HH:mm") + ". Aguarde o prazo antes de tentar novamente.", "Fonte em pausa", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
         if (manager.State.Holds.Count == 0) return;
-        if (MessageBox.Show(this, "Você já resolveu a restrição de acesso ou aguardou o limite do serviço? Liberar uma fonte não resolve a causa e repetir tentativas pode agravar a restrição.\n\nLiberar as fontes em pausa?", "Fontes em pausa", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+        string list = String.Join("\n", manager.State.Holds.Select(h => "• " + h.Source + ": " + UiText.HoldReason(h.Reason)).ToArray());
+        if (MessageBox.Show(this, "Fontes em pausa:\n" + list + "\n\nVocê já resolveu a restrição de acesso ou aguardou o limite do serviço? Liberar uma fonte não resolve a causa e repetir tentativas pode agravar a restrição.\n\nLiberar as fontes em pausa?", "Fontes em pausa", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
         { manager.ReleaseHolds(); Feedback("Fontes liberadas. Use Tentar de novo nos itens bloqueados.", false); RefreshUi(); }
     }
 

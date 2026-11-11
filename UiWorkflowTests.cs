@@ -141,6 +141,20 @@ class UiWorkflowTests
             Check(topics.Count == 12 && Convert.ToString(topics[1]["warning"]).Contains("restrições na conta") && Convert.ToString(topics[1]["body"]).Contains("Instagram"), "12 embedded help topics, with the profile/account risk and the Instagram limitation");
             Check(!json.Contains("Opções avançadas") && !json.Contains("Analisar link") && json.Contains("12 dias"), "help no longer mentions the old screen and explains the 12-day history");
         }
+        // 5e. an item waiting on a paused source says so, with the reason, instead of looking like an ordinary queue
+        {
+            var engine = new SimulatedEngine();
+            using (var form = Open(engine, "paused"))
+            {
+                form.Manager.State.Holds.Add(new SourceHold { Source = "media.example", Reason = "Rate limit", Until = DateTime.UtcNow.AddMinutes(10) });
+                form.Manager.State.Queue.Add(new DownloadItem { Url = "https://media.example/x", Title = "Parado", Status = "Pending", Destination = form.Manager.State.Destination });
+                form.RefreshNow();
+                var row = form.ListView.Rows.Single(r => r.Kind == "item");
+                Check(row.Right == "Fonte em pausa" && row.State == 2 && row.Sub.Contains("limitou os acessos"), "a queued item on a paused source shows the pause and its reason");
+                Paste(form, "https://media.example/video"); Pump(form.AnalyzeNow());
+                Check(form.Preview.Sub.Contains("em pausa") && form.Preview.Sub.Contains("Volta sozinha"), "analyzing a link from a paused source explains why and when it returns");
+            }
+        }
         // 5d. a Windows "blocked folder" error (WinError 448) is shown as one clear sentence, other errors stay as reported
         {
             string blocked = UiText.Friendly("ERROR: [WinError 448] The path cannot be traversed because it contains an untrusted mount point");
